@@ -93,7 +93,7 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 # List of commands that don't require an app at all
-COMMANDS_NO_APP_NEEDED = ["help", "link_token", "unlink_token", "list_apps", "select_app", "ping", "info"]
+COMMANDS_NO_APP_NEEDED = ["help", "list_apps", "select_app", "ping", "info"]
 
 def is_channel_allowed(interaction: discord.Interaction) -> bool:
     try:
@@ -161,10 +161,6 @@ async def on_ready():
 @tree.command(name="help", description="Show all available commands")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(title="LegitAuth Bot Help", color=0x5865F2)
-    embed.add_field(name="🔑 Authentication Commands", value=(
-        "/link_token [token] - Link your LegitAuth API token\n"
-        "/unlink_token - Unlink your API token\n"
-    ), inline=False)
     embed.add_field(name="📱 App Management", value=(
         "/list_apps - List all your apps\n"
         "/select_app [app_id] - Select an app to manage\n"
@@ -203,57 +199,12 @@ async def info(interaction: discord.Interaction):
     embed.add_field(name="Server Count", value=f"{len(client.guilds)}", inline=True)
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="link_token", description="Link your LegitAuth API token to use the bot")
-@app_commands.describe(api_token="Your API token from LegitAuth Dashboard's Discord tab")
-async def link_token(interaction: discord.Interaction, api_token: str):
-    # Save token first, then test it
-    user_id_str = str(interaction.user.id)
-    user_tokens[user_id_str] = api_token
-    save_user_tokens(user_tokens)
-    
-    # Now test the token
-    test_url = f"{API_BASE}/apps"
-    test_res = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
-    
-    if test_res.status_code == 200:
-        await interaction.response.send_message("✅ Token linked successfully! You can now use the bot commands!", ephemeral=True)
-    else:
-        # Try to get error details
-        error_msg = "Unknown error"
-        try:
-            error_data = test_res.json()
-            if isinstance(error_data, dict):
-                error_msg = error_data.get("detail", str(error_data))
-        except:
-            pass
-        
-        await interaction.response.send_message(
-            f"⚠️ Token saved, but validation failed (Status: {test_res.status_code}).\n"
-            f"Error: {error_msg}\n\n"
-            f"Please make sure:\n"
-            f"1. You're logged into the LegitAuth dashboard\n"
-            f"2. You copied the FULL token from the Discord tab (it should be a long string of characters)\n"
-            f"3. The server is running at {API_BASE}",
-            ephemeral=True
-        )
-
-@tree.command(name="unlink_token", description="Unlink your LegitAuth API token from the bot")
-async def unlink_token(interaction: discord.Interaction):
-    user_id_str = str(interaction.user.id)
-    if user_id_str in user_tokens:
-        del user_tokens[user_id_str]
-        save_user_tokens(user_tokens)
-    if user_id_str in user_selected_app:
-        del user_selected_app[user_id_str]
-        save_user_selected_apps(user_selected_app)
-    await interaction.response.send_message("✅ Token unlinked successfully.", ephemeral=True)
-
 @tree.command(name="list_apps", description="List your LegitAuth applications")
 async def list_apps(interaction: discord.Interaction):
     url = f"{API_BASE}/apps"
     res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
     if res.status_code != 200:
-        await interaction.response.send_message("❌ Could not load apps! Did you link your token with `/link_token`?", ephemeral=True)
+        await interaction.response.send_message("❌ Could not load apps! Did you link your Discord account in the dashboard?", ephemeral=True)
         return
     apps = res.json()
     if not apps:
@@ -276,7 +227,7 @@ async def select_app(interaction: discord.Interaction, app_id: int):
     url = f"{API_BASE}/apps"
     res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
     if res.status_code != 200:
-        await interaction.response.send_message("❌ Could not verify app! Did you link your token with `/link_token`?", ephemeral=True)
+        await interaction.response.send_message("❌ Could not verify app! Did you link your Discord account in the dashboard?", ephemeral=True)
         return
     apps = res.json()
     selected = next((a for a in apps if a["id"] == app_id), None)
