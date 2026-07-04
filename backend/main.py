@@ -119,6 +119,11 @@ class DiscordConfigRequest(BaseModel):
     discord_channel_id: Optional[str] = None
     discord_guild_name: Optional[str] = None
     discord_channel_name: Optional[str] = None
+    discord_log_enabled: Optional[bool] = False
+    discord_welcome_enabled: Optional[bool] = False
+    discord_welcome_msg: Optional[str] = "Welcome to the Server!"
+    discord_role_on_register: Optional[str] = None
+    discord_dm_notifications: Optional[bool] = True
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -198,7 +203,7 @@ def log_app_action(db: Session, app_id: int, action: str, description: str):
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name} for app in applications]
+    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications} for app in applications]
 
 @app.post("/api/creator/apps/create")
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -398,6 +403,11 @@ def update_app_discord_config(app_id: int, req: DiscordConfigRequest, current_cr
     app.discord_channel_id = req.discord_channel_id
     app.discord_guild_name = req.discord_guild_name
     app.discord_channel_name = req.discord_channel_name
+    app.discord_log_enabled = req.discord_log_enabled
+    app.discord_welcome_enabled = req.discord_welcome_enabled
+    app.discord_welcome_msg = req.discord_welcome_msg
+    app.discord_role_on_register = req.discord_role_on_register
+    app.discord_dm_notifications = req.discord_dm_notifications
     db.commit()
     return {"message": "Discord integration settings updated"}
 
@@ -416,7 +426,16 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
         "secret": app.secret,
         "status": app.status,
         "version": app.version,
-        "dev_message": app.dev_message
+        "dev_message": app.dev_message,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
+        "discord_log_enabled": app.discord_log_enabled,
+        "discord_welcome_enabled": app.discord_welcome_enabled,
+        "discord_welcome_msg": app.discord_welcome_msg,
+        "discord_role_on_register": app.discord_role_on_register,
+        "discord_dm_notifications": app.discord_dm_notifications
     }
 
 # --- Discord OAuth2 Endpoints ---
