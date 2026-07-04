@@ -318,34 +318,6 @@ button:active {
     color: white;
 }
 
-/* Discord specific styling */
-.discord-card {
-    background: rgba(0,0,0,0.35);
-    border-radius: 16px;
-    border: 1px solid var(--glass-border);
-    padding: 24px;
-    margin-bottom: 20px;
-    transition: all 0.3s ease;
-}
-
-.discord-card:hover {
-    border-color: rgba(88, 101, 242, 0.4);
-    box-shadow: 0 10px 30px rgba(88, 101, 242, 0.1);
-}
-
-.discord-card h3 {
-    color: white;
-    margin-bottom: 16px;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.discord-card select {
-    width: 100%;
-}
-
 .app-card {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255,255,255,0.05);
