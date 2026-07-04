@@ -644,8 +644,8 @@ function updateQuickSetup() {
                 btnStep2.style.opacity = 1;
                 btnStep2.style.pointerEvents = 'auto';
                 
-                // Simple bot invite URL without conflicting OAuth parameters
-                btnStep2.href = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
+                // Super clean bot invite URL - no extra parameters!
+                btnStep2.href = "https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
                 
                 // Mark step 3 as pending
                 step3Status.innerText = 'Pending';
@@ -729,7 +729,7 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-invite-link').href = 'https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
+        document.getElementById('discord-invite-link').href = 'https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
         return;
     }
     
@@ -737,8 +737,8 @@ async function onDiscordGuildSelect(guildId) {
     const guild = currentDiscordGuilds.find(g => g.id == guildId);
     if (guild) resolvedGuildName = guild.name;
     
-    // Update invite link (simple bot invite without OAuth conflicts)
-    const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
+    // Update invite link (super clean, no extra parameters)
+    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
     document.getElementById('discord-invite-link').href = inviteUrl;
     
     // Also update quick setup button's link!
