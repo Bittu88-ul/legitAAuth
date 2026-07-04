@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional, List
 from dotenv import load_dotenv
+from urllib.parse import urlencode
 
 # Load environment variables from both root and discord_bot directories
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
@@ -569,13 +570,16 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
 def get_bot_invite_url(guild_id: Optional[str] = None):
     if not DISCORD_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Discord client ID not set")
-    url = (
-        f"https://discord.com/api/oauth2/authorize?client_id={DISCORD_CLIENT_ID}"
-        f"&permissions={DISCORD_BOT_PERMISSIONS}"
-        f"&scope=bot%20applications.commands"
-    )
+    # Use proper URL encoding
+    params = {
+        "client_id": DISCORD_CLIENT_ID,
+        "permissions": DISCORD_BOT_PERMISSIONS,
+        "scope": "bot applications.commands"
+    }
     if guild_id:
-        url += f"&guild_id={guild_id}&disable_guild_select=true"
+        params["guild_id"] = guild_id
+        params["disable_guild_select"] = "true"
+    url = "https://discord.com/api/oauth2/authorize?" + urlencode(params)
     return {"invite_url": url}
 
 
