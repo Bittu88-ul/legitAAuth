@@ -319,31 +319,25 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
 
                         <!-- Discord Config Features -->
                         <h4 style="color:white; margin-bottom:15px; margin-top:10px;"><i class="fas fa-cog" style="margin-right:8px;"></i>Bot Settings</h4>
-                        <div style="margin-bottom:15px;">
-                            <label style="color: var(--text-muted); font-size:14px; display:inline-flex; align-items:center; gap:8px;">
-                                <input type="checkbox" id="discord-config-notifications" style="margin:0;"/>
-                                <span>Send notifications on user/key login</span>
-                            </label>
+                        <div style="margin-bottom:20px; display:flex; align-items:center; gap:12px;">
+                            <input type="checkbox" id="discord-config-notifications" style="width:22px; height:22px; cursor:pointer; flex-shrink:0;">
+                            <label style="color: var(--text-muted); font-size:16px; cursor:pointer;">Send notifications on user/key login</label>
                         </div>
-                        <div style="margin-bottom:15px;">
-                            <label style="color: var(--text-muted); font-size:14px; display:inline-flex; align-items:center; gap:8px;">
-                                <input type="checkbox" id="discord-config-command-prefix" style="margin:0;"/>
-                                <span>Use slash commands (/) (default: enabled)</span>
-                            </label>
-                        </div>
-                        <div style="margin-bottom:15px;">
-                            <label style="color: var(--text-muted); font-size:14px; display: block; margin-bottom:5px;">Command Prefix (if not slash commands</label>
-                            <input type="text" id="discord-config-prefix" value="!" style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);" />
-                        </div>
-                        <div style="margin-bottom:15px;">
-                            <label style="color: var(--text-muted); font-size:14px; display: block; margin-bottom:5px;">Bot Welcome Message (when joining server)</label>
-                            <textarea id="discord-config-welcome" rows="3" style="width:100%; padding:10px; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">Welcome! Use /help to see commands!</textarea>
+                        <div style="margin-bottom:20px; display:flex; align-items:center; gap:12px;">
+                            <input type="checkbox" id="discord-config-slash-commands" style="width:22px; height:22px; cursor:pointer; flex-shrink:0;">
+                            <label style="color: var(--text-muted); font-size:16px; cursor:pointer;">Use slash commands (/) (default: enabled)</label>
                         </div>
                         <div style="margin-bottom:20px;">
-                            <label style="color: var(--text-muted); font-size:14px; display:inline-flex; align-items:center; gap:8px;">
-                                <input type="checkbox" id="discord-config-allow-private" style="margin:0;"/>
-                                <span>Allow private commands (DM)</span>
-                            </label>
+                            <label style="color: var(--text-muted); font-size:16px; display: block; margin-bottom:8px;">Command Prefix (if not using slash commands)</label>
+                            <input type="text" id="discord-config-prefix" value="!" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); font-size:16px;">
+                        </div>
+                        <div style="margin-bottom:20px;">
+                            <label style="color: var(--text-muted); font-size:16px; display: block; margin-bottom:8px;">Bot Welcome Message (when joining server)</label>
+                            <textarea id="discord-config-welcome" rows="4" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); font-size:16px;">Welcome! Use /help to see commands!</textarea>
+                        </div>
+                        <div style="margin-bottom:20px; display:flex; align-items:center; gap:12px;">
+                            <input type="checkbox" id="discord-config-allow-private" style="width:22px; height:22px; cursor:pointer; flex-shrink:0;">
+                            <label style="color: var(--text-muted); font-size:16px; cursor:pointer;">Allow private commands (DM)</label>
                         </div>
 
                         <div style="display: flex; gap: 10px;">
