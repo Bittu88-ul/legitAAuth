@@ -56,31 +56,49 @@ function showDashboard() {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('dashboard-container').style.display = 'flex';
     
-    // Update Settings Profile Email & Token dynamically
     const email = localStorage.getItem('email') || 'Unknown';
     const emailSpan = document.getElementById('profile-email');
-    if (emailSpan) {
-        emailSpan.innerText = email;
-    }
+    if (emailSpan) emailSpan.innerText = email;
     const tokenInput = document.getElementById('profile-api-token');
-    if (tokenInput) {
-        tokenInput.value = localStorage.getItem('token') || '';
-    }
+    if (tokenInput) tokenInput.value = localStorage.getItem('token') || '';
     
     loadApps();
-    checkDiscordLink();
+    handleHashNavigation();
     setBotInviteLink('discord-invite-link');
 }
 
-function showTab(tabId) {
+function handleHashNavigation() {
+    const hash = window.location.hash.replace('#', '');
+    const tab = hash.split('?')[0] || 'apps';
+    if (['apps', 'workspace', 'discord', 'docs', 'settings'].includes(tab)) {
+        showTab(tab, false);
+    }
+    if (tab === 'discord') {
+        checkDiscordLink();
+        const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+        if (params.get('bot_added')) {
+            showToast('Bot successfully added to server!', 'success');
+            setTimeout(() => updateQuickSetup(), 1500);
+        }
+    }
+}
+
+function showTab(tabId, updateHash = true) {
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
     document.getElementById(`${tabId}-tab`).style.display = 'block';
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    const navEl = document.getElementById(`nav-${tabId}`);
+    if (navEl) navEl.classList.add('active');
+    if (updateHash) window.location.hash = tabId;
     if (tabId === 'discord') {
         checkDiscordLink();
-    }
-    if (tabId === 'apps') {
         updateQuickSetup();
     }
+}
+
+function scrollToDiscordConfig() {
+    const section = document.getElementById('discord-config-section');
+    if (section) section.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function loadApps() {
@@ -324,22 +342,6 @@ async function loadLicenses() {
         list.innerHTML = html;
         updateGrowthChart(null, licenses.length);
     } catch(e) {}
-}
-
-function setExpiryPreset(days) {
-    const expiryInput = document.getElementById('new-user-expiry');
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    
-    // Convert to datetime-local format (YYYY-MM-DDTHH:MM)
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    
-    expiryInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-    showToast(`Expiry set to ${days} days from now!`, 'success');
 }
 
 async function addUser() {
@@ -635,8 +637,10 @@ let resolvedGuildName = null;
 let currentDiscordGuilds = [];
 
 async function fetchBotInviteUrl(guildId = null) {
+    const token = localStorage.getItem('token');
     const params = guildId ? `?guild_id=${guildId}` : '';
-    const res = await fetch(`${API_URL}/discord/invite-url${params}`);
+    const headers = token ? {'Authorization': `Bearer ${token}`} : {};
+    const res = await fetch(`${API_URL}/discord/invite-url${params}`, { headers });
     if (res.ok) {
         const data = await res.json();
         if (data.redirect_uri) {
@@ -644,12 +648,101 @@ async function fetchBotInviteUrl(guildId = null) {
             const uriEl = document.getElementById('discord-redirect-uri');
             if (hint && uriEl) {
                 uriEl.textContent = data.redirect_uri;
-                hint.style.display = 'block';
+                hint.classList.remove('hidden');
             }
         }
         return data.invite_url;
     }
     return null;
+}
+
+function setSetupBadge(el, status) {
+    if (!el) return;
+    el.className = 'setup-badge ' + status;
+    const labels = { pending: 'Pending', locked: 'Locked', complete: 'Complete' };
+    el.innerText = labels[status] || status;
+}
+
+function setSetupCard(card, state) {
+    if (!card) return;
+    card.classList.remove('locked', 'complete', 'active');
+    if (state) card.classList.add(state);
+}
+
+function setBtnEnabled(el, enabled, isLink = false) {
+    if (!el) return;
+    if (isLink) {
+        el.classList.toggle('disabled', !enabled);
+    } else {
+        el.classList.toggle('disabled', !enabled);
+        el.disabled = !enabled;
+    }
+}
+
+async function updateQuickSetup() {
+    const step1Status = document.getElementById('step1-status');
+    const btnStep1 = document.getElementById('btn-step1');
+    const step2Status = document.getElementById('step2-status');
+    const btnStep2 = document.getElementById('btn-step2');
+    const step3Status = document.getElementById('step3-status');
+    const btnStep3 = document.getElementById('btn-step3');
+    const card1 = document.getElementById('setup-step1');
+    const card2 = document.getElementById('setup-step2');
+    const card3 = document.getElementById('setup-step3');
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+        const res = await fetch(`${API_URL}/discord/setup-status`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (!res.ok) {
+            setSetupBadge(step1Status, 'pending');
+            setSetupBadge(step2Status, 'locked');
+            setSetupBadge(step3Status, 'locked');
+            setSetupCard(card1, 'active');
+            setSetupCard(card2, 'locked');
+            setSetupCard(card3, 'locked');
+            setBtnEnabled(btnStep2, false, true);
+            setBtnEnabled(btnStep3, false);
+            return;
+        }
+
+        const status = await res.json();
+
+        if (status.step1_linked) {
+            setSetupBadge(step1Status, 'complete');
+            setSetupCard(card1, 'complete');
+            setBtnEnabled(btnStep1, false);
+
+            setSetupBadge(step2Status, status.step2_bot_added ? 'complete' : 'pending');
+            setSetupCard(card2, status.step2_bot_added ? 'complete' : 'active');
+            setBtnEnabled(btnStep2, true, true);
+            await setBotInviteLink('btn-step2');
+
+            if (status.step2_bot_added) {
+                setSetupBadge(step3Status, status.step3_configured ? 'complete' : 'pending');
+                setSetupCard(card3, status.step3_configured ? 'complete' : 'active');
+                setBtnEnabled(btnStep3, true);
+            } else {
+                setSetupBadge(step3Status, 'locked');
+                setSetupCard(card3, 'locked');
+                setBtnEnabled(btnStep3, false);
+            }
+        } else {
+            setSetupBadge(step1Status, 'pending');
+            setSetupBadge(step2Status, 'locked');
+            setSetupBadge(step3Status, 'locked');
+            setSetupCard(card1, 'active');
+            setSetupCard(card2, 'locked');
+            setSetupCard(card3, 'locked');
+            setBtnEnabled(btnStep2, false, true);
+            setBtnEnabled(btnStep3, false);
+        }
+    } catch (e) {
+        console.error('Setup status error', e);
+    }
 }
 
 async function setBotInviteLink(elementId, guildId = null) {
@@ -659,88 +752,32 @@ async function setBotInviteLink(elementId, guildId = null) {
     if (url) el.href = url;
 }
 
-async function updateQuickSetup() {
-    // Step 1 check
-    const step1Status = document.getElementById('step1-status');
-    const btnStep1 = document.getElementById('btn-step1');
-    const step2Status = document.getElementById('step2-status');
-    const btnStep2 = document.getElementById('btn-step2');
-    const step3Status = document.getElementById('step3-status');
-    const btnStep3 = document.getElementById('btn-step3');
-    
-    // Check if discord linked first
-    const token = localStorage.getItem('token');
-    try {
-        const resMe = await fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}});
-        if (resMe.ok) {
-            // Step 1 complete!
-            step1Status.innerText = 'Complete';
-            step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
-            step1Status.style.color = '#10b981';
-            step1Status.style.borderColor = '#10b981';
-            btnStep1.disabled = true;
-            btnStep1.style.opacity = 0.5;
-            
-            // Now step 2 unlocked!
-            step2Status.innerText = 'Pending';
-            step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
-            step2Status.style.color = '#ef4444';
-            step2Status.style.borderColor = '#ef4444';
-            btnStep2.style.opacity = 1;
-            btnStep2.style.pointerEvents = 'auto';
-            setBotInviteLink('btn-step2');
-            
-            // Mark step 3 as pending
-            step3Status.innerText = 'Pending';
-            step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
-            step3Status.style.color = '#ef4444';
-            step3Status.style.borderColor = '#ef4444';
-            
-            // Check if we have any Discord guilds (Step2 is complete!)
-            const resGuilds = await fetch(`${API_URL}/discord/guilds`, {headers: {'Authorization': `Bearer ${token}`}});
-            if (resGuilds.ok) {
-                const guilds = await resGuilds.json();
-                if (guilds.length > 0) {
-                    step2Status.innerText = 'Complete';
-                    step2Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                    step2Status.style.color = '#10b981';
-                    step2Status.style.borderColor = '#10b981';
-                    btnStep2.disabled = true;
-                    btnStep2.style.opacity = 0.5;
-                    
-                    // Check if there are any apps with discord linked to mark step3 complete
-                    if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
-                        step3Status.innerText = 'Complete!';
-                        step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                        step3Status.style.color = '#10b981';
-                        step3Status.style.borderColor = '#10b981';
-                        btnStep3.style.opacity = 1;
-                        btnStep3.style.pointerEvents = 'auto';
-                    }
-                }
-            }
-        }
-    } catch(e) {
-        console.log(e);
-    }
-}
-
 async function checkDiscordLink() {
     const token = localStorage.getItem('token');
+    const linkStatus = document.getElementById('discord-link-status');
+    const linkedStatus = document.getElementById('discord-linked-status');
+    const accountBadge = document.getElementById('discord-account-badge');
     try {
         const res = await fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}});
         if (res.ok) {
             const userData = await res.json();
-            document.getElementById('discord-link-status').style.display = 'none';
-            document.getElementById('discord-linked-status').style.display = 'block';
-            document.getElementById('discord-user-tag').innerText = userData.username + '#' + (userData.discriminator || '0');
-            await loadDiscordGuilds();
-            updateQuickSetup();
+            const displayName = userData.global_name || userData.username;
+            if (linkStatus) linkStatus.classList.add('hidden');
+            if (linkedStatus) linkedStatus.classList.remove('hidden');
+            const linkedName = document.getElementById('discord-linked-name');
+            if (linkedName) linkedName.innerText = displayName;
+            const userTag = document.getElementById('discord-user-tag');
+            if (userTag) userTag.innerText = displayName;
+            if (accountBadge) accountBadge.classList.remove('hidden');
+            await loadDiscordBotGuilds(true);
+            await updateQuickSetup();
+        } else {
+            throw new Error('not linked');
         }
     } catch(e) {
-        // Discord not linked
-        document.getElementById('discord-link-status').style.display = 'block';
-        document.getElementById('discord-linked-status').style.display = 'none';
+        if (linkStatus) linkStatus.classList.remove('hidden');
+        if (linkedStatus) linkedStatus.classList.add('hidden');
+        if (accountBadge) accountBadge.classList.add('hidden');
     }
 }
 
@@ -757,28 +794,44 @@ async function linkDiscordAccount() {
     }
 }
 
-async function loadDiscordGuilds() {
+async function loadDiscordBotGuilds(silent = false) {
     const token = localStorage.getItem('token');
+    const guildSelector = document.getElementById('discord-guild-selector');
+    const hint = document.getElementById('discord-guild-hint');
     try {
-        const res = await fetch(`${API_URL}/discord/guilds`, {headers: {'Authorization': `Bearer ${token}`}});
+        const res = await fetch(`${API_URL}/discord/bot-guilds`, {headers: {'Authorization': `Bearer ${token}`}});
         if (res.ok) {
             const guilds = await res.json();
             currentDiscordGuilds = guilds;
-            const guildSelector = document.getElementById('discord-guild-selector');
-            guildSelector.innerHTML = '<option value="">-- Select Server --</option>';
-            guilds.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id;
-                opt.text = g.name;
-                guildSelector.appendChild(opt);
-            });
-            showToast(`Loaded ${guilds.length} servers!`, 'info');
-        } else {
-            throw new Error();
+            if (guildSelector) {
+                const prev = guildSelector.value;
+                guildSelector.innerHTML = '<option value="">-- Select Server --</option>';
+                guilds.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.text = g.name;
+                    guildSelector.appendChild(opt);
+                });
+                if (prev && guilds.some(g => g.id == prev)) guildSelector.value = prev;
+            }
+            if (hint) {
+                hint.textContent = guilds.length
+                    ? `${guilds.length} server(s) where LegitAuth Bot is installed.`
+                    : 'No servers found yet — invite the bot using Step 2 above.';
+            }
+            if (!silent) showToast(`Found ${guilds.length} server(s) with bot installed`, 'info');
+            return guilds;
         }
+        throw new Error();
     } catch(e) {
-        showToast('Could not load Discord servers', 'error');
+        if (hint) hint.textContent = 'Could not load servers. Make sure Discord is linked and bot is invited.';
+        if (!silent) showToast('Could not load bot servers', 'error');
+        return [];
     }
+}
+
+async function loadDiscordGuilds() {
+    return loadDiscordBotGuilds(false);
 }
 
 async function onDiscordGuildSelect(guildId) {
@@ -831,12 +884,12 @@ async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
 }
 
 async function switchDiscordApp(appId) {
+    const details = document.getElementById('discord-integration-details');
     if (!appId) {
-        document.getElementById('discord-integration-details').style.display = 'none';
+        if (details) details.classList.add('hidden');
         return;
     }
-    
-    document.getElementById('discord-integration-details').style.display = 'block';
+    if (details) details.classList.remove('hidden');
     
     const app = currentApps.find(a => a.id == appId);
     if (!app) return;
@@ -845,15 +898,14 @@ async function switchDiscordApp(appId) {
     const statusBadge = document.getElementById('discord-status-badge');
     const unlinkBtn = document.getElementById('discord-unlink-btn');
     
+    await loadDiscordBotGuilds(true);
+
     if (app.discord_guild_id && app.discord_channel_id) {
-        statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
+        statusText.innerText = `Active in "${app.discord_guild_name}" → #${app.discord_channel_name}`;
+        setSetupBadge(statusBadge, 'complete');
         statusBadge.innerText = 'Active';
-        statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
-        statusBadge.style.color = '#10b981';
-        statusBadge.style.borderColor = '#10b981';
-        unlinkBtn.style.display = 'inline-block';
+        unlinkBtn.classList.remove('hidden');
         
-        // Populate the guild selector
         resolvedGuildId = app.discord_guild_id;
         resolvedGuildName = app.discord_guild_name;
         const guildSelector = document.getElementById('discord-guild-selector');
@@ -865,18 +917,13 @@ async function switchDiscordApp(appId) {
             guildSelector.appendChild(opt);
         }
         guildSelector.value = resolvedGuildId;
-        
         await setBotInviteLink('discord-invite-link', resolvedGuildId);
-        
-        // Load channels
         await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
     } else {
-        statusText.innerText = 'Not Configured';
+        statusText.innerText = 'Not configured — select a server and channel below';
+        setSetupBadge(statusBadge, 'pending');
         statusBadge.innerText = 'Inactive';
-        statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
-        statusBadge.style.color = '#ef4444';
-        statusBadge.style.borderColor = '#ef4444';
-        unlinkBtn.style.display = 'none';
+        unlinkBtn.classList.add('hidden');
     }
 }
 
@@ -929,6 +976,8 @@ async function saveDiscordConfig() {
     const channelSelector = document.getElementById('discord-channel-selector');
     const channelName = channelSelector.options[channelSelector.selectedIndex]?.text.replace('#', '') || '';
     
+    if (!appId) return showToast('Please select an application', 'error');
+    if (!resolvedGuildId) return showToast('Please select a server where the bot is installed', 'error');
     if (!channelId) return showToast('Please select an operating channel', 'error');
     
     const token = localStorage.getItem('token');
@@ -947,11 +996,11 @@ async function saveDiscordConfig() {
             })
         });
         if (res.ok) {
-            showToast('Discord configuration saved successfully!', 'success');
+            showToast('Discord configuration saved! Bot will only work in the selected channel.', 'success');
             await loadApps();
-            // Re-select to update the status card view
             document.getElementById('discord-app-selector').value = appId;
             await switchDiscordApp(appId);
+            await updateQuickSetup();
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to save configuration', 'error');
@@ -983,9 +1032,9 @@ async function unlinkDiscordConfig() {
         if (res.ok) {
             showToast('Discord integration removed.', 'info');
             await loadApps();
-            // Re-select to update UI
             document.getElementById('discord-app-selector').value = appId;
             await switchDiscordApp(appId);
+            await updateQuickSetup();
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to unlink', 'error');
@@ -999,3 +1048,5 @@ async function unlinkDiscordConfig() {
 if (localStorage.getItem('token')) {
     showDashboard();
 }
+
+window.addEventListener('hashchange', handleHashNavigation);
