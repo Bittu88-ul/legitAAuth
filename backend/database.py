@@ -33,8 +33,6 @@ class Creator(Base):
     discord_access_token = Column(String, nullable=True)
     discord_refresh_token = Column(String, nullable=True)
     discord_token_expires_at = Column(DateTime, nullable=True)
-    api_token = Column(String, unique=True, nullable=True)  # Permanent API token for Discord bot
-    discord_username = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -67,12 +65,6 @@ class Application(Base):
     discord_channel_id = Column(String, nullable=True)
     discord_guild_name = Column(String, nullable=True)
     discord_channel_name = Column(String, nullable=True)
-    # Discord Config Features
-    discord_notifications = Column(Boolean, default=True) # Send notifications on user/key login
-    discord_slash_commands = Column(Boolean, default=True) # Use slash commands (/)
-    discord_command_prefix = Column(String, default="!") # Command prefix if not slash commands
-    discord_welcome_message = Column(String, default="Welcome! Use /help to see commands!")
-    discord_allow_private = Column(Boolean, default=False) # Allow private commands (DM)
 
     # Relationships
     creator = relationship("Creator", back_populates="applications")
@@ -148,32 +140,6 @@ def init_db():
             conn.execute(text("ALTER TABLE applications ADD COLUMN discord_channel_name VARCHAR"))
     except Exception:
         pass
-    # Add Discord Config fields to applications
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_notifications BOOLEAN DEFAULT 1"))
-    except Exception:
-        pass
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_slash_commands BOOLEAN DEFAULT 1"))
-    except Exception:
-        pass
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_command_prefix VARCHAR DEFAULT '!'"))
-    except Exception:
-        pass
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_welcome_message VARCHAR DEFAULT 'Welcome! Use /help to see commands!'"))
-    except Exception:
-        pass
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_allow_private BOOLEAN DEFAULT 0"))
-    except Exception:
-        pass
     # Add Discord OAuth fields to creators
     try:
         with engine.begin() as conn:
@@ -193,18 +159,6 @@ def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE creators ADD COLUMN discord_token_expires_at DATETIME"))
-    except Exception:
-        pass
-    # Add api_token column to creators
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE creators ADD COLUMN api_token VARCHAR"))
-    except Exception:
-        pass
-    # Add discord_username column to creators
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_username VARCHAR"))
     except Exception:
         pass
 
