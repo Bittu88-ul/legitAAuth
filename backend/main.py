@@ -475,8 +475,12 @@ def discord_login(current_creator: Creator = Depends(get_current_creator)):
     return {"auth_url": url}
 
 @app.get("/api/creator/discord/callback")
-def discord_callback(code: str, state: str, db: Session = Depends(get_db)):
+def discord_callback(code: Optional[str] = None, state: Optional[str] = None, guild_id: Optional[str] = None, permissions: Optional[str] = None, db: Session = Depends(get_db)):
     try:
+        # If this is a bot invite callback (no state), just redirect to dashboard!
+        if not state:
+            return RedirectResponse(url="/#discord")
+        
         if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
             raise HTTPException(status_code=500, detail="Discord OAuth not configured")
         
@@ -527,7 +531,8 @@ def discord_callback(code: str, state: str, db: Session = Depends(get_db)):
         return RedirectResponse(url="/#discord")
     except Exception as e:
         print(f"Discord callback error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Even if there's an error, still try to redirect to dashboard
+        return RedirectResponse(url="/#discord")
 
 @app.get("/api/creator/discord/me")
 def get_discord_me(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
