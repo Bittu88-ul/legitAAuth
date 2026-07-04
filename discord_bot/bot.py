@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_BASE = os.getenv("LEGITAUTH_API_URL", "https://legitauth1-3.onrender.com")
-DEFAULT_API_TOKEN = os.getenv("LEGITAUTH_API_TOKEN")  # Fallback for owner
+DEFAULT_API_TOKEN = os.getenv("LEGITAUTH_API_TOKEN")
+BOT_API_SECRET = os.getenv("DISCORD_BOT_API_SECRET", os.getenv("DISCORD_BOT_TOKEN"))
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
@@ -49,17 +50,52 @@ def api_headers():
 def get_linked_app(channel_id: int, user_id: int):
     url = f"{API_BASE}/api/creator/discord/app-by-channel/{channel_id}"
     try:
-        resp = requests.get(url, headers=api_headers_for_user(user_id))
+        resp = requests.get(url, headers=api_headers_for_user(user_id), timeout=5)
         if resp.status_code == 200:
             return resp.json()
     except Exception:
         pass
+    if BOT_API_SECRET:
+        try:
+            bot_url = f"{API_BASE}/api/creator/discord/bot/app-by-channel/{channel_id}"
+            resp = requests.get(bot_url, headers={"X-Bot-Secret": BOT_API_SECRET}, timeout=5)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception:
+            pass
     return None
 
-def get_current_app(interaction: discord.Interaction):
+
+def resolve_app_for_interaction(interaction: discord.Interaction):
+    """Resolve app and enforce channel restriction from dashboard config."""
     app = user_selected_app.get(interaction.user.id)
     if not app:
         app = get_linked_app(interaction.channel_id, interaction.user.id)
+
+    if not app:
+        return None, "No app linked to this channel. Set up server & channel in the LegitAuth Discord tab."
+
+    linked_channel = app.get("discord_channel_id")
+    if linked_channel and str(interaction.channel_id) != str(linked_channel):
+        ch_name = app.get("discord_channel_name") or "configured channel"
+        guild_name = app.get("discord_guild_name") or "your server"
+        return None, (
+            f"This bot only accepts commands in **#{ch_name}** on **{guild_name}**. "
+            f"Please switch to that channel."
+        )
+    return app, None
+
+
+def get_current_app(interaction: discord.Interaction):
+    app, _ = resolve_app_for_interaction(interaction)
+    return app
+
+
+async def require_linked_app(interaction: discord.Interaction):
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+        return None
     return app
 
 # New commands for linking/unlinking token
@@ -122,15 +158,23 @@ async def select_app(interaction: discord.Interaction, app_id: int):
     if not selected:
         await interaction.response.send_message("App ID not found under your account.", ephemeral=True)
         return
+    linked_channel = selected.get("discord_channel_id")
+    if linked_channel and str(interaction.channel_id) != str(linked_channel):
+        ch_name = selected.get("discord_channel_name") or "configured channel"
+        await interaction.response.send_message(
+            f"This app is configured for **#{ch_name}** only. Switch to that channel first.",
+            ephemeral=True,
+        )
+        return
     user_selected_app[interaction.user.id] = selected
     await interaction.response.send_message(f"Selected app **{selected['app_name']}** (ID: {app_id}).", ephemeral=True)
 
 @tree.command(name="create_user", description="Create a new user/password for the selected app")
 @app_commands.describe(username="New username", password="Password", expires_at="ISO datetime or leave blank", hw_id_lock="Lock to HWID (true/false)")
 async def create_user(interaction: discord.Interaction, username: str, password: str, expires_at: Optional[str] = None, hw_id_lock: bool = True):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel. Use `/select_app <app_id>` first or link this channel in the dashboard.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -149,9 +193,9 @@ async def create_user(interaction: discord.Interaction, username: str, password:
 
 @tree.command(name="list_users", description="List all users for the selected app")
 async def list_users(interaction: discord.Interaction):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -176,9 +220,9 @@ async def list_users(interaction: discord.Interaction):
 @tree.command(name="delete_user", description="Delete a user from the selected app")
 @app_commands.describe(user_id="User ID from /list_users")
 async def delete_user(interaction: discord.Interaction, user_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -192,9 +236,9 @@ async def delete_user(interaction: discord.Interaction, user_id: int):
 @tree.command(name="reset_user_hwid", description="Reset HWID for a user")
 @app_commands.describe(user_id="User ID from /list_users")
 async def reset_user_hwid(interaction: discord.Interaction, user_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -208,9 +252,9 @@ async def reset_user_hwid(interaction: discord.Interaction, user_id: int):
 @tree.command(name="toggle_user_ban", description="Ban/unban a user")
 @app_commands.describe(user_id="User ID from /list_users")
 async def toggle_user_ban(interaction: discord.Interaction, user_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -224,9 +268,9 @@ async def toggle_user_ban(interaction: discord.Interaction, user_id: int):
 @tree.command(name="create_license", description="Generate licenses for the selected app")
 @app_commands.describe(amount="Number of licenses", duration_days="Duration in days (0 = lifetime)", expires_at="ISO datetime or leave blank", hw_id_lock="Lock to HWID (true/false)")
 async def create_license(interaction: discord.Interaction, amount: int, duration_days: int = 0, expires_at: Optional[str] = None, hw_id_lock: bool = True):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel. Use `/select_app <app_id>` first or link this channel in the dashboard.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -247,9 +291,9 @@ async def create_license(interaction: discord.Interaction, amount: int, duration
 
 @tree.command(name="list_licenses", description="List all licenses for the selected app")
 async def list_licenses(interaction: discord.Interaction):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -274,9 +318,9 @@ async def list_licenses(interaction: discord.Interaction):
 @tree.command(name="delete_license", description="Delete a license from the selected app")
 @app_commands.describe(license_id="License ID from /list_licenses")
 async def delete_license(interaction: discord.Interaction, license_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -290,9 +334,9 @@ async def delete_license(interaction: discord.Interaction, license_id: int):
 @tree.command(name="reset_license_hwid", description="Reset HWID for a license")
 @app_commands.describe(license_id="License ID from /list_licenses")
 async def reset_license_hwid(interaction: discord.Interaction, license_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -306,9 +350,9 @@ async def reset_license_hwid(interaction: discord.Interaction, license_id: int):
 @tree.command(name="toggle_license_ban", description="Ban/unban a license")
 @app_commands.describe(license_id="License ID from /list_licenses")
 async def toggle_license_ban(interaction: discord.Interaction, license_id: int):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
@@ -321,9 +365,9 @@ async def toggle_license_ban(interaction: discord.Interaction, license_id: int):
 
 @tree.command(name="list_logs", description="List recent logs for the selected app")
 async def list_logs(interaction: discord.Interaction):
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+    app, err = resolve_app_for_interaction(interaction)
+    if err:
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
         return
     
     app_id = app["id"]
