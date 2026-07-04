@@ -345,6 +345,101 @@ async def list_logs(interaction: discord.Interaction):
         )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+# New help command
+@tree.command(name="help", description="Show available bot commands")
+async def help_cmd(interaction: discord.Interaction):
+    embed = discord.Embed(title="Help - Available Commands", color=0x00FFAA)
+    commands = [
+        ("/help", "Show this help message"),
+        ("/list_apps", "List your LegitAuth applications"),
+        ("/select_app", "Select an application to work with"),
+        ("/create_user", "Create a new user/password for the selected app"),
+        ("/list_users", "List all users for the selected app"),
+        ("/list_licenses", "List all licenses for the selected app"),
+        ("/stats", "Show statistics for the selected app"),
+        ("/app_info", "Show detailed information about the selected app"),
+        ("/search_user", "Search for a user by username"),
+        ("/search_key", "Search for a license key"),
+        ("/change_password", "Change password for a user"),
+        ("/active_users", "List active users"),
+        ("/banned_users", "List banned users"),
+        ("/clean_banned", "Remove all banned users"),
+        ("/register", "Register the current channel with an app")
+    ]
+    for name, desc in commands:
+        embed.add_field(name=name, value=desc, inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# Placeholder commands for additional features
+@tree.command(name="stats", description="Show statistics for the selected app")
+async def stats(interaction: discord.Interaction):
+    await interaction.response.send_message("Stats feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="app_info", description="Show detailed information about the selected app")
+async def app_info(interaction: discord.Interaction):
+    await interaction.response.send_message("App info feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="search_user", description="Search for a user by username")
+async def search_user(interaction: discord.Interaction, username: str):
+    await interaction.response.send_message("Search user feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="search_key", description="Search for a license key")
+async def search_key(interaction: discord.Interaction, key: str):
+    await interaction.response.send_message("Search key feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="change_password", description="Change password for a user")
+async def change_password(interaction: discord.Interaction, user_id: int, new_password: str):
+    await interaction.response.send_message("Change password feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="active_users", description="List active users")
+async def active_users(interaction: discord.Interaction):
+    await interaction.response.send_message("Active users feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="banned_users", description="List banned users")
+async def banned_users(interaction: discord.Interaction):
+    await interaction.response.send_message("Banned users feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="clean_banned", description="Remove all banned users")
+async def clean_banned(interaction: discord.Interaction):
+    await interaction.response.send_message("Clean banned feature not implemented yet.", ephemeral=True)
+
+@tree.command(name="register", description="Register the current channel with an app")
+async def register(interaction: discord.Interaction, app_id: int):
+    # Register this channel to the app for future commands
+    url = f"{API_BASE}/api/creator/apps/{app_id}/discord"
+    payload = {"discord_channel_id": str(interaction.channel_id)}
+    resp = requests.put(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("Channel registered successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Registration failed: {resp.json().get('detail', 'unknown error')}",
+                                              ephemeral=True)
+
+# Welcome new members handler
+@client.event
+async def on_member_join(member: discord.Member):
+    """Welcome new members if enabled in the app configuration."""
+    try:
+        url = f"{API_BASE}/api/creator/discord/app-by-guild/{member.guild.id}"
+        resp = requests.get(url, headers=api_headers())
+        if resp.status_code == 200:
+            app = resp.json()
+            if app.get("discord_welcome_enabled"):
+                # Send welcome message
+                channel_id = app.get("discord_welcome_channel_id")
+                if channel_id:
+                    channel = member.guild.get_channel(int(channel_id))
+                    if channel:
+                        await channel.send(app.get("discord_welcome_msg", "Welcome to the server!"))
+                # Assign role
+                role_id = app.get("discord_role_on_register")
+                if role_id:
+                    role = member.guild.get_role(int(role_id))
+                    if role:
+                        await member.add_roles(role)
+    except Exception as e:
+        print(f"Error in welcome handler: {e}")
+
 @client.event
 async def on_ready():
     await tree.sync()
