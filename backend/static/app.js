@@ -69,6 +69,7 @@ function showDashboard() {
     
     loadApps();
     checkDiscordLink();
+    setBotInviteLink('discord-invite-link');
 }
 
 function showTab(tabId) {
@@ -76,6 +77,9 @@ function showTab(tabId) {
     document.getElementById(`${tabId}-tab`).style.display = 'block';
     if (tabId === 'discord') {
         checkDiscordLink();
+    }
+    if (tabId === 'apps') {
+        updateQuickSetup();
     }
 }
 
@@ -320,6 +324,22 @@ async function loadLicenses() {
         list.innerHTML = html;
         updateGrowthChart(null, licenses.length);
     } catch(e) {}
+}
+
+function setExpiryPreset(days) {
+    const expiryInput = document.getElementById('new-user-expiry');
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    
+    // Convert to datetime-local format (YYYY-MM-DDTHH:MM)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    expiryInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    showToast(`Expiry set to ${days} days from now!`, 'success');
 }
 
 async function addUser() {
@@ -614,7 +634,32 @@ let resolvedGuildId = null;
 let resolvedGuildName = null;
 let currentDiscordGuilds = [];
 
-function updateQuickSetup() {
+async function fetchBotInviteUrl(guildId = null) {
+    const params = guildId ? `?guild_id=${guildId}` : '';
+    const res = await fetch(`${API_URL}/discord/invite-url${params}`);
+    if (res.ok) {
+        const data = await res.json();
+        if (data.redirect_uri) {
+            const hint = document.getElementById('discord-setup-hint');
+            const uriEl = document.getElementById('discord-redirect-uri');
+            if (hint && uriEl) {
+                uriEl.textContent = data.redirect_uri;
+                hint.style.display = 'block';
+            }
+        }
+        return data.invite_url;
+    }
+    return null;
+}
+
+async function setBotInviteLink(elementId, guildId = null) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const url = await fetchBotInviteUrl(guildId);
+    if (url) el.href = url;
+}
+
+async function updateQuickSetup() {
     // Step 1 check
     const step1Status = document.getElementById('step1-status');
     const btnStep1 = document.getElementById('btn-step1');
@@ -625,49 +670,59 @@ function updateQuickSetup() {
     
     // Check if discord linked first
     const token = localStorage.getItem('token');
-    fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}})
-        .then(async res => {
-            if (res.ok) {
-                // Step 1 complete!
-                step1Status.innerText = 'Complete';
-                step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                step1Status.style.color = '#10b981';
-                step1Status.style.borderColor = '#10b981';
-                btnStep1.disabled = true;
-                btnStep1.style.opacity = 0.5;
-                
-                // Now step 2 unlocked!
-                step2Status.innerText = 'Pending';
-                step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
-                step2Status.style.color = '#ef4444';
-                step2Status.style.borderColor = '#ef4444';
-                btnStep2.style.opacity = 1;
-                btnStep2.style.pointerEvents = 'auto';
-                
-                // Super clean bot invite URL - no extra parameters!
-                btnStep2.href = "https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
-                
-                // Mark step 3 as pending
-                step3Status.innerText = 'Pending';
-                step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
-                step3Status.style.color = '#ef4444';
-                step3Status.style.borderColor = '#ef4444';
-                
-                // Check if there are any apps with discord linked to mark step3 complete
-                if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
-                    step3Status.innerText = 'Complete!';
-                    step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                    step3Status.style.color = '#10b981';
-                    step3Status.style.borderColor = '#10b981';
-                    btnStep3.style.opacity = 1;
-                    btnStep3.style.pointerEvents = 'auto';
+    try {
+        const resMe = await fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}});
+        if (resMe.ok) {
+            // Step 1 complete!
+            step1Status.innerText = 'Complete';
+            step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
+            step1Status.style.color = '#10b981';
+            step1Status.style.borderColor = '#10b981';
+            btnStep1.disabled = true;
+            btnStep1.style.opacity = 0.5;
+            
+            // Now step 2 unlocked!
+            step2Status.innerText = 'Pending';
+            step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
+            step2Status.style.color = '#ef4444';
+            step2Status.style.borderColor = '#ef4444';
+            btnStep2.style.opacity = 1;
+            btnStep2.style.pointerEvents = 'auto';
+            setBotInviteLink('btn-step2');
+            
+            // Mark step 3 as pending
+            step3Status.innerText = 'Pending';
+            step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
+            step3Status.style.color = '#ef4444';
+            step3Status.style.borderColor = '#ef4444';
+            
+            // Check if we have any Discord guilds (Step2 is complete!)
+            const resGuilds = await fetch(`${API_URL}/discord/guilds`, {headers: {'Authorization': `Bearer ${token}`}});
+            if (resGuilds.ok) {
+                const guilds = await resGuilds.json();
+                if (guilds.length > 0) {
                     step2Status.innerText = 'Complete';
                     step2Status.style.background = 'rgba(16, 185, 129, 0.2)';
                     step2Status.style.color = '#10b981';
                     step2Status.style.borderColor = '#10b981';
+                    btnStep2.disabled = true;
+                    btnStep2.style.opacity = 0.5;
+                    
+                    // Check if there are any apps with discord linked to mark step3 complete
+                    if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
+                        step3Status.innerText = 'Complete!';
+                        step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                        step3Status.style.color = '#10b981';
+                        step3Status.style.borderColor = '#10b981';
+                        btnStep3.style.opacity = 1;
+                        btnStep3.style.pointerEvents = 'auto';
+                    }
                 }
             }
-        });
+        }
+    } catch(e) {
+        console.log(e);
+    }
 }
 
 async function checkDiscordLink() {
@@ -729,7 +784,7 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-invite-link').href = 'https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
+        await setBotInviteLink('discord-invite-link');
         return;
     }
     
@@ -737,15 +792,8 @@ async function onDiscordGuildSelect(guildId) {
     const guild = currentDiscordGuilds.find(g => g.id == guildId);
     if (guild) resolvedGuildName = guild.name;
     
-    // Update invite link (super clean, no extra parameters)
-    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
-    document.getElementById('discord-invite-link').href = inviteUrl;
-    
-    // Also update quick setup button's link!
-    const quickSetupBtn2 = document.getElementById('btn-step2');
-    if (quickSetupBtn2) {
-        quickSetupBtn2.href = inviteUrl;
-    }
+    await setBotInviteLink('discord-invite-link', guildId);
+    await setBotInviteLink('btn-step2', guildId);
     
     // Load channels
     await loadDiscordGuildChannels(guildId);
@@ -818,15 +866,7 @@ async function switchDiscordApp(appId) {
         }
         guildSelector.value = resolvedGuildId;
         
-        // Set invite url
-        const token = localStorage.getItem('token');
-        try {
-            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
-            if (resInvite.ok) {
-                const data = await resInvite.json();
-                document.getElementById('discord-invite-link').href = data.invite_url;
-            }
-        } catch(e) {}
+        await setBotInviteLink('discord-invite-link', resolvedGuildId);
         
         // Load channels
         await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
@@ -865,12 +905,7 @@ async function resolveDiscordInvite() {
             }
             guildSelector.value = resolvedGuildId;
             
-            // Set invite URL
-            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
-            if (resInvite.ok) {
-                const inviteData = await resInvite.json();
-                document.getElementById('discord-invite-link').href = inviteData.invite_url;
-            }
+            await setBotInviteLink('discord-invite-link', resolvedGuildId);
             
             showToast('Discord server found!', 'success');
             
