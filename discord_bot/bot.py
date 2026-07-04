@@ -15,37 +15,34 @@ API_BASE = os.getenv("LEGITAUTH_API_URL", "https://legitauth1-3.onrender.com")
 DEFAULT_API_TOKEN = os.getenv("LEGITAUTH_API_TOKEN")  # Fallback for owner
 
 def parse_expiry(expiry_str: Optional[str]) -> Optional[str]:
-    if not expiry_str:
-        return None
-    s = expiry_str.strip().lower()
-    if s in ("none", "never", "lifetime", "null", "0", ""):
+    if not expiry_str or expiry_str.strip().lower() in ("none", "never", "lifetime", "null", "0", ""):
         return None
     
     # Check if they just wrote a plain number of days, e.g. "30"
-    if s.isdigit():
-        days_val = int(s)
+    if expiry_str.strip().isdigit():
+        days_val = int(expiry_str.strip())
         if days_val <= 0:
             return None
         dt = datetime.utcnow() + timedelta(days=days_val)
         return dt.isoformat()
     
-    # Try parsing format like "7d", "7 days", "12 hours", "30 mins", "1 year"
-    pattern = re.compile(r"^(\d+)\s*([a-z]+)$", re.IGNORECASE)
-    match = pattern.match(s)
+    # Try parsing format like 1d, 12h, 30m, 1y, etc.
+    pattern = re.compile(r"^(\d+)([dhmwy]?)$", re.IGNORECASE)
+    match = pattern.match(expiry_str.strip())
     if match:
         val = int(match.group(1))
-        unit = match.group(2)
+        unit = match.group(2).lower() if match.group(2) else "d"
         
         now = datetime.utcnow()
-        if unit in ("d", "day", "days"):
+        if unit == "d":
             dt = now + timedelta(days=val)
-        elif unit in ("h", "hr", "hour", "hours"):
+        elif unit == "h":
             dt = now + timedelta(hours=val)
-        elif unit in ("m", "min", "mins", "minute", "minutes"):
+        elif unit == "m":
             dt = now + timedelta(minutes=val)
-        elif unit in ("w", "wk", "wks", "week", "weeks"):
+        elif unit == "w":
             dt = now + timedelta(weeks=val)
-        elif unit in ("y", "yr", "yrs", "year", "years"):
+        elif unit == "y":
             dt = now + timedelta(days=val * 365)
         else:
             return None
@@ -54,7 +51,7 @@ def parse_expiry(expiry_str: Optional[str]) -> Optional[str]:
     # Check if they wrote it as a plain ISO date already, just in case
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
-            dt = datetime.strptime(s, fmt)
+            dt = datetime.strptime(expiry_str.strip(), fmt)
             return dt.isoformat()
         except ValueError:
             continue
@@ -160,33 +157,20 @@ async def list_apps(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="select_app", description="Select an application to work with")
-@app_commands.describe(app_identifier="Application ID or Application Name from /list_apps")
-async def select_app(interaction: discord.Interaction, app_identifier: str):
+@app_commands.describe(app_id="Application ID from /list_apps")
+async def select_app(interaction: discord.Interaction, app_id: int):
     url = f"{API_BASE}/api/creator/apps"
     resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
     if resp.status_code != 200:
         await interaction.response.send_message("❌ Unable to verify app. Did you link your token with /link_token?", ephemeral=True)
         return
     apps = resp.json()
-    
-    selected = None
-    if app_identifier.isdigit():
-        selected = next((a for a in apps if a["id"] == int(app_identifier)), None)
+    selected = next((a for a in apps if a["id"] == app_id), None)
     if not selected:
-        selected = next((a for a in apps if a["app_name"].lower() == app_identifier.lower()), None)
-    if not selected:
-        selected = next((a for a in apps if app_identifier.lower() in a["app_name"].lower()), None)
-    if not selected:
-        def normalize(s):
-            return re.sub(r'[^a-z0-9]', '', s.lower())
-        norm_id = normalize(app_identifier)
-        selected = next((a for a in apps if normalize(a["app_name"]) == norm_id), None)
-        
-    if not selected:
-        await interaction.response.send_message("❌ App not found under your account. Please check the name/ID.", ephemeral=True)
+        await interaction.response.send_message("App ID not found under your account.", ephemeral=True)
         return
     user_selected_app[interaction.user.id] = selected
-    await interaction.response.send_message(f"Selected app **{selected['app_name']}** (ID: {selected['id']}).", ephemeral=True)
+    await interaction.response.send_message(f"Selected app **{selected['app_name']}** (ID: {app_id}).", ephemeral=True)
 
 @tree.command(name="create_user", description="Create a new user/password for the selected app")
 @app_commands.describe(username="New username", password="Password", expires_at="Duration (e.g. 7d, 24h, 30) or leave blank for lifetime", hw_id_lock="Lock to HWID (true/false)")
@@ -689,13 +673,6 @@ async def give_cread(interaction: discord.Interaction, app_identifier: Optional[
             selected_app = next((a for a in apps if a['id'] == int(app_identifier)), None)
         if not selected_app:
             selected_app = next((a for a in apps if a['app_name'].lower() == app_identifier.lower()), None)
-        if not selected_app:
-            selected_app = next((a for a in apps if app_identifier.lower() in a['app_name'].lower()), None)
-        if not selected_app:
-            def normalize(s):
-                return re.sub(r'[^a-z0-9]', '', s.lower())
-            norm_id = normalize(app_identifier)
-            selected_app = next((a for a in apps if normalize(a['app_name']) == norm_id), None)
     else:
         current = get_current_app(interaction)
         if current:
