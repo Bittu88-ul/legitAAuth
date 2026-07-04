@@ -46,54 +46,16 @@
         <nav>
             <h2>LegitAuth</h2>
             <ul>
-                <li><a href="#" onclick="showTab('apps')"><i class="fas fa-layer-group"></i> Applications</a></li>
-                <li><a href="#" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
-                <li><a href="#" onclick="showTab('docs')"><i class="fas fa-book"></i> Documentation</a></li>
-                <li><a href="#" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</a></li>
-<li><a href="#" onclick="showTab('discord')"><i class="fab fa-discord"></i> Discord Bot</a></li>
-                <li style="margin-top: 50px;"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                <li><a href="#" id="nav-apps" class="nav-link active" onclick="showTab('apps')"><i class="fas fa-layer-group"></i> Applications</a></li>
+                <li><a href="#" id="nav-workspace" class="nav-link" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
+                <li><a href="#" id="nav-discord" class="nav-link" onclick="showTab('discord')"><i class="fab fa-discord"></i> Discord</a></li>
+                <li><a href="#" id="nav-docs" class="nav-link" onclick="showTab('docs')"><i class="fas fa-book"></i> Documentation</a></li>
+                <li><a href="#" id="nav-settings" class="nav-link" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</a></li>
+                <li style="margin-top: 50px;"><a href="#" onclick="logout()" class="nav-link nav-logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </nav>
         <main>
             <div id="apps-tab" class="tab-content">
-                <!-- Quick Setup Section (Carlbot Style) -->
-                <div style="background: rgba(0,0,0,0.4); padding: 30px; border-radius: 16px; border: 1px solid var(--glass-border); margin-bottom:30px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <h2 style="color: white; margin:0; font-size:28px;"><i class="fas fa-rocket"></i> Quick Setup</h2>
-                        <button onclick="updateQuickSetup()" style="width:auto; padding:8px 16px; background:rgba(88,101,242,0.2); border:1px solid #5865F2; color:white; border-radius:8px; cursor:pointer;"><i class="fas fa-sync-alt"></i> Refresh</button>
-                    </div>
-                    <p style="color: var(--text-muted); margin-bottom:25px; font-size:16px;">Get your bot up and running in under 30 seconds!</p>
-                    
-                    <div style="display:flex; gap:15px; flex-wrap:wrap;">
-                        <div id="setup-step1" style="flex:1; min-width:280px; padding:20px; background:rgba(88,101,242,0.1); border-radius:12px; border:1px solid rgba(88,101,242,0.3);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                <h3 style="margin:0; color: #5865F2;"><i class="fab fa-discord" style="margin-right:8px;"></i>Step 1: Connect Discord</h3>
-                                <span id="step1-status" style="background: rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">Pending</span>
-                            </div>
-                            <p style="color:var(--text-muted); margin-bottom:15px; font-size:14px;">Link your Discord account to access your servers</p>
-                            <button id="btn-step1" onclick="linkDiscordAccount()" style="background:#5865F2; border:none; color:white; padding:12px 25px; border-radius:8px; cursor:pointer; font-weight:bold; width:100%;"><i class="fab fa-discord" style="margin-right:8px;"></i>Link Discord</button>
-                        </div>
-                        
-                        <div id="setup-step2" style="flex:1; min-width:280px; padding:20px; background:rgba(0,0,0,0.3); border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                <h3 style="margin:0; color: white;"><i class="fas fa-server" style="margin-right:8px;"></i>Step 2: Add Bot to Server</h3>
-                                <span id="step2-status" style="background: rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">Locked</span>
-                            </div>
-                            <p style="color:var(--text-muted); margin-bottom:15px; font-size:14px;">Invite LegitAuth Bot to your Discord server</p>
-                            <a id="btn-step2" href="#" target="_blank" style="display:block; text-align:center; text-decoration:none; background:#5865F2; border:none; color:white; padding:12px 25px; border-radius:8px; cursor:pointer; font-weight:bold; opacity:0.5; pointer-events:none;"><i class="fab fa-discord" style="margin-right:8px;"></i>Invite Bot</a>
-                        </div>
-                        
-                        <div id="setup-step3" style="flex:1; min-width:280px; padding:20px; background:rgba(0,0,0,0.3); border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                                <h3 style="margin:0; color: white;"><i class="fas fa-play-circle" style="margin-right:8px;"></i>Step 3: Done!</h3>
-                                <span id="step3-status" style="background: rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">Locked</span>
-                            </div>
-                            <p style="color:var(--text-muted); margin-bottom:15px; font-size:14px;">You're ready to use the bot in your server!</p>
-                            <button id="btn-step3" onclick="showTab('discord')" style="width:100%; opacity:0.5; pointer-events:none;"><i class="fas fa-wrench" style="margin-right:8px;"></i>Manage Bot Settings</button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Dashboard Analytics Overview -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -154,12 +116,6 @@
                             <input type="text" id="new-user-name" placeholder="Username" style="width:200px; margin:0;">
                             <input type="password" id="new-user-pass" placeholder="Password" style="width:200px; margin:0;">
                             <input type="datetime-local" id="new-user-expiry" style="width:200px; margin:0;">
-                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                                <button type="button" onclick="setExpiryPreset(7)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">7 Days</button>
-                                <button type="button" onclick="setExpiryPreset(30)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">30 Days</button>
-                                <button type="button" onclick="setExpiryPreset(90)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">90 Days</button>
-                                <button type="button" onclick="setExpiryPreset(365)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">1 Year</button>
-                            </div>
                             <label><input type="checkbox" id="new-user-hwid" checked> HWID Lock</label>
                             <button onclick="addUser()" style="width:auto; padding: 16px 32px;">Add User</button>
                         </div>
@@ -300,73 +256,133 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                 </div>
             </div>
             <div id="discord-tab" class="tab-content" style="display:none;">
-                <h2><i class="fab fa-discord" style="color: #5865F2; margin-right: 10px;"></i>Discord Bot Integration</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Manage LegitAuth applications directly inside your Discord server.</p>
-
-                <!-- Discord Link Status -->
-                <div id="discord-link-section" style="background: rgba(0,0,0,0.3); padding: 25px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:20px;">
-                    <h3 style="margin-bottom:15px; color: white;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Connect Discord Account</h3>
-                    <div id="discord-link-status">
-                        <p style="color: var(--text-muted); margin-bottom:15px;">Link your Discord account to manage servers directly from the dashboard</p>
-                        <button onclick="linkDiscordAccount()" style="background:#5865F2; border:none; color:white; padding:10px 25px; border-radius:8px; cursor:pointer;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Link Discord Account</button>
+                <div class="discord-header">
+                    <div>
+                        <h2><i class="fab fa-discord discord-icon"></i> Discord Integration</h2>
+                        <p>Connect your account, invite the bot, and configure which channel it listens to.</p>
                     </div>
-                    <div id="discord-linked-status" style="display:none;">
-                        <p style="color: var(--text-muted); margin-bottom:15px;">Discord Account Linked: <strong id="discord-user-tag" style="color: var(--success);"></strong></p>
-                        <button onclick="loadDiscordGuilds()" style="width:auto; padding:8px 16px; margin-right:10px; background: var(--primary);"><i class="fas fa-sync"></i> Refresh Servers</button>
+                    <div id="discord-account-badge" class="discord-account-badge hidden">
+                        <i class="fab fa-discord"></i>
+                        <span id="discord-user-tag"></span>
                     </div>
                 </div>
-                
-                <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                    <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-layer-group" style="margin-right: 8px;"></i>1. Select Application</h3>
-                    <select id="discord-app-selector" onchange="switchDiscordApp(this.value)" style="padding: 10px; width: 100%; max-width: 400px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        <option value="">-- Select an App to Integrate --</option>
-                    </select>
-                </div>
 
-                <div id="discord-integration-details" style="display:none;">
-                    <!-- Status Card -->
-                    <div class="stat-card" style="margin-bottom: 20px; width: 100%; max-width: 600px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid var(--glass-border); border-radius: 12px;">
+                <!-- Quick Setup -->
+                <section class="discord-section">
+                    <div class="section-title">
+                        <i class="fas fa-rocket"></i>
                         <div>
-                            <h4 style="margin: 0; color: var(--text-muted);">Integration Status</h4>
-                            <h3 id="discord-status-text" style="margin: 5px 0 0 0; font-size: 18px; color: white;">Not Configured</h3>
+                            <h3>Quick Setup</h3>
+                            <p>Get your bot running in under 30 seconds</p>
                         </div>
-                        <span id="discord-status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">Inactive</span>
+                    </div>
+                    <div class="setup-grid">
+                        <div id="setup-step1" class="setup-card">
+                            <div class="setup-card-head">
+                                <h4><i class="fab fa-discord"></i> Step 1: Connect Discord</h4>
+                                <span id="step1-status" class="setup-badge pending">Pending</span>
+                            </div>
+                            <p>Link your Discord account to manage servers from the dashboard.</p>
+                            <button id="btn-step1" class="btn-discord" onclick="linkDiscordAccount()"><i class="fab fa-discord"></i> Link Discord</button>
+                        </div>
+                        <div id="setup-step2" class="setup-card locked">
+                            <div class="setup-card-head">
+                                <h4><i class="fas fa-server"></i> Step 2: Add Bot to Server</h4>
+                                <span id="step2-status" class="setup-badge locked">Locked</span>
+                            </div>
+                            <p>Invite LegitAuth Bot to your Discord server.</p>
+                            <a id="btn-step2" href="#" target="_blank" class="btn-discord disabled"><i class="fab fa-discord"></i> Invite Bot</a>
+                        </div>
+                        <div id="setup-step3" class="setup-card locked">
+                            <div class="setup-card-head">
+                                <h4><i class="fas fa-hashtag"></i> Step 3: Choose Channel</h4>
+                                <span id="step3-status" class="setup-badge locked">Locked</span>
+                            </div>
+                            <p>Select a server &amp; channel below — bot only works in that channel.</p>
+                            <button id="btn-step3" class="btn-discord btn-secondary disabled" onclick="scrollToDiscordConfig()"><i class="fas fa-arrow-down"></i> Configure Below</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Connect Discord (shown when not linked) -->
+                <section id="discord-link-section" class="discord-section">
+                    <div class="section-title">
+                        <i class="fab fa-discord"></i>
+                        <div>
+                            <h3>Discord Account</h3>
+                            <p>Connect to see servers where the bot is installed</p>
+                        </div>
+                    </div>
+                    <div id="discord-link-status" class="discord-connect-box">
+                        <p>Your Discord account is not linked yet.</p>
+                        <button class="btn-discord" onclick="linkDiscordAccount()"><i class="fab fa-discord"></i> Link Discord Account</button>
+                    </div>
+                    <div id="discord-linked-status" class="discord-connect-box linked hidden">
+                        <p>Connected as <strong id="discord-linked-name"></strong></p>
+                        <button class="btn-ghost" onclick="loadDiscordBotGuilds()"><i class="fas fa-sync"></i> Refresh Servers</button>
+                    </div>
+                </section>
+
+                <!-- App + Server + Channel Config -->
+                <section id="discord-config-section" class="discord-section">
+                    <div class="section-title">
+                        <i class="fas fa-sliders-h"></i>
+                        <div>
+                            <h3>Server &amp; Channel Configuration</h3>
+                            <p>Pick the app, server, and the one channel where bot commands are allowed</p>
+                        </div>
                     </div>
 
-                    <!-- Setup Form -->
-                    <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>2. Link Discord Server & Channel</h3>
-                        
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
-                        <div style="display:flex; gap:10px; margin-bottom:20px;">
-                            <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)" style="padding:10px; flex:1; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">
-                                <option value="">-- Select Server --</option>
+                    <div class="discord-config-grid">
+                        <div class="config-field">
+                            <label><i class="fas fa-layer-group"></i> Application</label>
+                            <select id="discord-app-selector" onchange="switchDiscordApp(this.value)">
+                                <option value="">-- Select an App --</option>
                             </select>
-                            <a id="discord-invite-link" href="#" target="_blank" style="display: inline-flex; align-items:center; gap:8px; text-decoration:none; background:#5865F2; color:white; padding:10px 15px; border-radius:8px; font-weight:bold; font-size:14px; white-space:nowrap;">
-                                <i class="fab fa-discord"></i> Invite Bot
-                            </a>
-                        </div>
-                        <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
-                            Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
-                            <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
-                        </p>
-
-                        <!-- Mandatory Channel Warning -->
-                        <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; padding: 12px 15px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
-                            <p style="color: #fbbf24; margin: 0; font-size: 14px;"><i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i><strong>MANDATORY:</strong> Aapko ek channel select karna hi padega. Bina channel select kare bot kaam nahi karega!</p>
                         </div>
 
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Channel <span style="color: #ef4444;">*</span></label>
-                        <select id="discord-channel-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                            <option value="">-- Choose Channel --</option>
-                        </select>
+                        <div id="discord-integration-details" class="hidden">
+                            <div class="discord-status-bar">
+                                <div>
+                                    <span class="label">Integration Status</span>
+                                    <p id="discord-status-text">Not Configured</p>
+                                </div>
+                                <span id="discord-status-badge" class="setup-badge pending">Inactive</span>
+                            </div>
 
-                        <div style="display: flex; gap: 10px;">
-                            <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Configuration</button>
-                            <button onclick="unlinkDiscordConfig()" id="discord-unlink-btn" style="display: none; width: auto; padding: 10px 20px; margin: 0; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;"><i class="fas fa-unlink"></i> Unlink</button>
+                            <div class="config-row">
+                                <div class="config-field flex-1">
+                                    <label><i class="fas fa-server"></i> Server (Bot Installed)</label>
+                                    <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)">
+                                        <option value="">-- Select Server --</option>
+                                    </select>
+                                    <p id="discord-guild-hint" class="field-hint">Only servers where LegitAuth Bot is added will appear here.</p>
+                                </div>
+                                <a id="discord-invite-link" href="#" target="_blank" class="btn-discord btn-invite">
+                                    <i class="fab fa-discord"></i> Invite Bot
+                                </a>
+                            </div>
+
+                            <p id="discord-setup-hint" class="setup-hint hidden">
+                                Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo:
+                                <code id="discord-redirect-uri"></code>
+                            </p>
+
+                            <div class="config-field">
+                                <label><i class="fas fa-hashtag"></i> Operating Channel</label>
+                                <select id="discord-channel-selector">
+                                    <option value="">-- Choose Channel --</option>
+                                </select>
+                                <p class="field-hint">Bot will only accept commands in this channel. Other channels are ignored.</p>
+                            </div>
+
+                            <div class="config-actions">
+                                <button class="btn-success" onclick="saveDiscordConfig()"><i class="fas fa-save"></i> Save Configuration</button>
+                                <button id="discord-unlink-btn" class="btn-danger hidden" onclick="unlinkDiscordConfig()"><i class="fas fa-unlink"></i> Unlink</button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
             </div>
             <div id="settings-tab" class="tab-content" style="display:none;">
                 <h2>Account Settings</h2>
