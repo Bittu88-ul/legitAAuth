@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 from urllib.parse import urlencode
 
 # Load environment variables from both root and discord_bot directories
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", ".env"), override=True)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", ".env"))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=True)
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -147,7 +147,11 @@ def get_current_creator(authorization: Optional[str] = Header(None), db: Session
         raise HTTPException(status_code=401, detail="Creator account not found")
     return creator
 
-def get_current_creator_any(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
+def get_current_creator_any(
+    authorization: Optional[str] = Header(None), 
+    x_discord_user_id: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> Creator:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization Header")
     try:
@@ -158,12 +162,29 @@ def get_current_creator_any(authorization: Optional[str] = Header(None), db: Ses
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid Authorization Header")
     
-    # First check if token is permanent API token
+    # 1. Check if token is the Discord Bot Token or LEGITAUTH_API_TOKEN to handle bot-level API access
+    bot_token = os.getenv("DISCORD_BOT_TOKEN")
+    shared_api_token = os.getenv("LEGITAUTH_API_TOKEN")
+    
+    is_bot = False
+    if (bot_token and token == bot_token) or (shared_api_token and token == shared_api_token):
+        is_bot = True
+        
+    if is_bot and x_discord_user_id:
+        creator = db.query(Creator).filter(Creator.discord_id == str(x_discord_user_id)).first()
+        if creator:
+            return creator
+        raise HTTPException(
+            status_code=401, 
+            detail="Your Discord account is not linked to any LegitAuth creator account. Please link it in the dashboard first."
+        )
+
+    # 2. Check if token is permanent API token
     creator_by_token = db.query(Creator).filter(Creator.api_token == token).first()
     if creator_by_token:
         return creator_by_token
     
-    # If not, check if it's a JWT token
+    # 3. If not, check if it's a JWT token
     payload = verify_access_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -647,6 +668,14 @@ def discord_callback(code: Optional[str] = None, state: Optional[str] = None, gu
         
         # Update creator
         creator.discord_id = user_data["id"]
+        
+        # Save username
+        disc = user_data.get("discriminator", "0")
+        if disc and disc != "0":
+            creator.discord_username = f"{user_data['username']}#{disc}"
+        else:
+            creator.discord_username = user_data["username"]
+            
         creator.discord_access_token = access_token
         creator.discord_refresh_token = refresh_token
         creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
@@ -660,14 +689,33 @@ def discord_callback(code: Optional[str] = None, state: Optional[str] = None, gu
 
 @app.get("/api/creator/discord/me")
 def get_discord_me(current_creator: Creator = Depends(get_current_creator_any), db: Session = Depends(get_db)):
-    if not current_creator.discord_id or not current_creator.discord_access_token:
+    if not current_creator.discord_id:
         raise HTTPException(status_code=404, detail="Discord not linked")
     
-    token = refresh_discord_token(current_creator, db)
-    res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to get Discord user")
-    return res.json()
+    username = current_creator.discord_username
+    if not username:
+        username = "Connected User"
+        if current_creator.discord_access_token:
+            try:
+                token = refresh_discord_token(current_creator, db)
+                res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token}"})
+                if res.status_code == 200:
+                    user_data = res.json()
+                    disc = user_data.get("discriminator", "0")
+                    if disc and disc != "0":
+                        username = f"{user_data['username']}#{disc}"
+                    else:
+                        username = user_data["username"]
+                    current_creator.discord_username = username
+                    db.commit()
+            except Exception:
+                pass
+                
+    parts = username.split("#")
+    uname = parts[0]
+    disc = parts[1] if len(parts) > 1 else "0"
+    
+    return {"id": current_creator.discord_id, "username": uname, "discriminator": disc}
 
 @app.get("/api/creator/discord/guilds")
 def get_discord_guilds(current_creator: Creator = Depends(get_current_creator_any), db: Session = Depends(get_db)):
