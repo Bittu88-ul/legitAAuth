@@ -13,15 +13,18 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)),
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 import smtplib
 from email.mime.text import MIMEText
 import requests
 
-from .database import init_db, get_db, Creator, Application, AppUser, AppLicense, AppLog, OTP
-from .auth_utils import hash_password, verify_password, create_access_token, verify_access_token
+from database import init_db, get_db, Creator, Application, AppUser, AppLicense, AppLog, OTP
+from auth_utils import hash_password, verify_password, create_access_token, verify_access_token
 
 app = FastAPI(title="LegitAuth System", version="1.0.0")
 
@@ -204,7 +207,7 @@ def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     if not req.app_name or req.app_name.strip() == "":
         raise HTTPException(status_code=400, detail="App name cannot be empty")
-        
+    
     owner_id = str(uuid.uuid4())
     secret = secrets.token_hex(32)
     new_app = Application(creator_id=current_creator.id, app_name=req.app_name.strip(), owner_id=owner_id, secret=secret)
@@ -356,7 +359,7 @@ def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = 
 def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
-    logs = db.query(AppLog).filter(AppLog.app_id == app.id).order_by(AppLog.id.desc()).limit(50).all()
+    logs = db.query(AppLog).filter(AppLog.app_id == app_id).order_by(AppLog.id.desc()).limit(50).all()
     return [{"id": l.id, "action": l.action, "description": l.description, "created_at": l.created_at.isoformat()} for l in logs]
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -423,7 +426,7 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", os.getenv("LEGITAUTH_API_URL", "http://localhost:8000") + "/api/creator/discord/callback")
-DISCORD_BOT_PERMISSIONS = "8"  # Administrator permissions
+DISCORD_BOT_PERMISSIONS = "8" # Administrator permissions
 
 def refresh_discord_token(creator: Creator, db: Session):
     # Check if token needs refresh
@@ -560,7 +563,7 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
     if not DISCORD_BOT_TOKEN:
         raise HTTPException(status_code=500, detail="Discord bot token missing")
     headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
+    res = requests.get(f"https://discord.com/api/v9/guilds/{guild_id}/channels", headers=headers)
     if res.status_code !=200:
         raise HTTPException(status_code=400, detail="Could not get channels from bot, make sure bot is in the server")
     channels = [c for c in res.json() if c["type"] ==0] # Only text channels
@@ -570,24 +573,18 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
 def get_bot_invite_url(guild_id: Optional[str] = None):
     if not DISCORD_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Discord client ID not set")
-    # Use proper URL encoding
-    params = {
-        "client_id": DISCORD_CLIENT_ID,
-        "permissions": DISCORD_BOT_PERMISSIONS,
-        "scope": "bot applications.commands"
-    }
+    # Simple, safe invite URL (no urlencode issues!)
+    base = f"https://discord.com/api/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&permissions={DISCORD_BOT_PERMISSIONS}&scope=bot+applications.commands"
     if guild_id:
-        params["guild_id"] = guild_id
-        params["disable_guild_select"] = "true"
-    url = "https://discord.com/api/oauth2/authorize?" + urlencode(params)
-    return {"invite_url": url}
-
+        base += f"&guild_id={guild_id}&disable_guild_select=true"
+    return {"invite_url": base}
 
 def send_discord_webhook(url: str, message: str):
     if not url: return
     try:
         requests.post(url, json={"content": message}, timeout=3)
-    except:
+    except Exception as e:
+        print(f"Failed to send webhook: {e}")
         pass
 
 # --- Client API ---
@@ -632,7 +629,7 @@ def client_login(req: ClientLoginRequest, request: Request, db: Session = Depend
             
         log_app_action(db, app.id, "LOGIN_SUCCESS", f"License logged in: {lic.license_key}")
         send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{lic.license_key}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
-            
+        
         return {"success": True, "message": "Logged in", "user": {"username": lic.license_key, "expires_at": lic.expires_at.isoformat() if lic.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
     
     elif req.username and req.password:
@@ -665,7 +662,7 @@ def client_login(req: ClientLoginRequest, request: Request, db: Session = Depend
             
         log_app_action(db, app.id, "LOGIN_SUCCESS", f"User logged in: {user.username}")
         send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{user.username}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
-            
+        
         return {"success": True, "message": "Logged in", "user": {"username": user.username, "expires_at": user.expires_at.isoformat() if user.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
     
     else:
