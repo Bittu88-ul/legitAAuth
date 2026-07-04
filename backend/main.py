@@ -573,8 +573,8 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
 
 @app.get("/api/creator/discord/invite-url")
 def get_bot_invite_url(guild_id: Optional[str] = None):
-    # Use user's exact OAuth2 URL
-    base = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flegitaauth.onrender.com%2Fapi%2Fcreator%2Fdiscord%2Fcallback&integration_type=0&scope=bot+applications.commands"
+    # Simple bot invite URL without OAuth user flow parameters that cause conflicts
+    base = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands"
     if guild_id:
         base += f"&guild_id={guild_id}&disable_guild_select=true"
     return {"invite_url": base}
