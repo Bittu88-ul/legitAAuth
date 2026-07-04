@@ -52,6 +52,47 @@ function logout() {
     showToast('Logged out successfully', 'info');
 }
 
+async function loadApiToken() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/api-token`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const tokenInput = document.getElementById('profile-api-token');
+            if (tokenInput) {
+                tokenInput.value = data.api_token;
+            }
+        }
+    } catch (e) {
+        console.error('Error loading API token:', e);
+    }
+}
+
+async function regenerateApiToken() {
+    if (!confirm('Are you sure you want to regenerate your API token? This will invalidate the old one.')) return;
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/regenerate-api-token`, {
+            method: 'POST',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const tokenInput = document.getElementById('profile-api-token');
+            if (tokenInput) {
+                tokenInput.value = data.api_token;
+            }
+            showToast('API token regenerated successfully!', 'success');
+        } else {
+            showToast('Failed to regenerate API token', 'error');
+        }
+    } catch (e) {
+        showToast('Error regenerating API token', 'error');
+    }
+}
+
 function showDashboard() {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('dashboard-container').style.display = 'flex';
@@ -62,11 +103,8 @@ function showDashboard() {
     if (emailSpan) {
         emailSpan.innerText = email;
     }
-    const tokenInput = document.getElementById('profile-api-token');
-    if (tokenInput) {
-        tokenInput.value = localStorage.getItem('token') || '';
-    }
     
+    loadApiToken();
     loadApps();
     checkDiscordLink();
     setBotInviteLink('discord-invite-link');
