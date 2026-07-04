@@ -456,19 +456,32 @@ def refresh_discord_token(creator: Creator, db: Session):
 def discord_login(current_creator: Creator = Depends(get_current_creator)):
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Discord OAuth not configured")
+    # Get user's token so we can pass it in state
+    user_token = create_access_token(data={"email": current_creator.email, "id": current_creator.id})
     scopes = "identify guilds"
     url = (
-        f"https://discord.com/oauth2/authorize?response_type=code"
+        f"https://discord.com/api/oauth2/authorize?response_type=code"
         f"&client_id={DISCORD_CLIENT_ID}"
         f"&redirect_uri={DISCORD_REDIRECT_URI}"
         f"&scope={scopes}"
+        f"&state={user_token}"
     )
     return {"auth_url": url}
 
 @app.get("/api/creator/discord/callback")
-def discord_callback(code: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+def discord_callback(code: str, state: str, db: Session = Depends(get_db)):
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Discord OAuth not configured")
+    
+    # Verify the token from state to get current creator
+    payload = verify_access_token(state)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid state token")
+    
+    # Get creator from payload
+    creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
+    if not creator:
+        raise HTTPException(status_code=401, detail="Creator not found")
     
     # Exchange code for access token
     data = {
@@ -495,10 +508,10 @@ def discord_callback(code: str, current_creator: Creator = Depends(get_current_c
     user_data = user_res.json()
     
     # Update creator
-    current_creator.discord_id = user_data["id"]
-    current_creator.discord_access_token = access_token
-    current_creator.discord_refresh_token = refresh_token
-    current_creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+    creator.discord_id = user_data["id"]
+    creator.discord_access_token = access_token
+    creator.discord_refresh_token = refresh_token
+    creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
     db.commit()
     
     # Redirect back to dashboard
