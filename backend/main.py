@@ -119,6 +119,12 @@ class DiscordConfigRequest(BaseModel):
     discord_channel_id: Optional[str] = None
     discord_guild_name: Optional[str] = None
     discord_channel_name: Optional[str] = None
+    # Discord Config Features
+    discord_notifications: Optional[bool] = None
+    discord_slash_commands: Optional[bool] = None
+    discord_command_prefix: Optional[str] = None
+    discord_welcome_message: Optional[str] = None
+    discord_allow_private: Optional[bool] = None
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -198,7 +204,7 @@ def log_app_action(db: Session, app_id: int, action: str, description: str):
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name} for app in applications]
+    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_notifications": app.discord_notifications, "discord_slash_commands": app.discord_slash_commands, "discord_command_prefix": app.discord_command_prefix, "discord_welcome_message": app.discord_welcome_message, "discord_allow_private": app.discord_allow_private} for app in applications]
 
 @app.post("/api/creator/apps/create")
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -398,8 +404,54 @@ def update_app_discord_config(app_id: int, req: DiscordConfigRequest, current_cr
     app.discord_channel_id = req.discord_channel_id
     app.discord_guild_name = req.discord_guild_name
     app.discord_channel_name = req.discord_channel_name
+    # Discord config features
+    if req.discord_notifications is not None:
+        app.discord_notifications = req.discord_notifications
+    if req.discord_slash_commands is not None:
+        app.discord_slash_commands = req.discord_slash_commands
+    if req.discord_command_prefix is not None:
+        app.discord_command_prefix = req.discord_command_prefix
+    if req.discord_welcome_message is not None:
+        app.discord_welcome_message = req.discord_welcome_message
+    if req.discord_allow_private is not None:
+        app.discord_allow_private = req.discord_allow_private
     db.commit()
     return {"message": "Discord integration settings updated"}
+
+@app.put("/api/creator/discord/integrate-all")
+def integrate_all_apps_discord(req: DiscordConfigRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if not req.discord_guild_id or not req.discord_channel_id:
+        raise HTTPException(status_code=400, detail="Must specify discord_guild_id and discord_channel_id")
+    
+    apps = db.query(Application).filter(Application.creator_id == current_creator.id).all()
+    for app in apps:
+        app.discord_guild_id = req.discord_guild_id
+        app.discord_channel_id = req.discord_channel_id
+        app.discord_guild_name = req.discord_guild_name
+        app.discord_channel_name = req.discord_channel_name
+        if req.discord_notifications is not None:
+            app.discord_notifications = req.discord_notifications
+        if req.discord_slash_commands is not None:
+            app.discord_slash_commands = req.discord_slash_commands
+        if req.discord_command_prefix is not None:
+            app.discord_command_prefix = req.discord_command_prefix
+        if req.discord_welcome_message is not None:
+            app.discord_welcome_message = req.discord_welcome_message
+        if req.discord_allow_private is not None:
+            app.discord_allow_private = req.discord_allow_private
+    db.commit()
+    return {"message": f"Integrated {len(apps)} apps to Discord"}
+
+@app.post("/api/creator/discord/unlink-all")
+def unlink_all_apps_discord(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    apps = db.query(Application).filter(Application.creator_id == current_creator.id).all()
+    for app in apps:
+        app.discord_guild_id = None
+        app.discord_channel_id = None
+        app.discord_guild_name = None
+        app.discord_channel_name = None
+    db.commit()
+    return {"message": "Unlinked all apps from Discord"}
 
 @app.get("/api/creator/discord/app-by-channel/{channel_id}")
 def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -416,7 +468,14 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
         "secret": app.secret,
         "status": app.status,
         "version": app.version,
-        "dev_message": app.dev_message
+        "dev_message": app.dev_message,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_notifications": app.discord_notifications,
+        "discord_slash_commands": app.discord_slash_commands,
+        "discord_command_prefix": app.discord_command_prefix,
+        "discord_welcome_message": app.discord_welcome_message,
+        "discord_allow_private": app.discord_allow_private
     }
 
 # --- Discord OAuth2 Endpoints ---
