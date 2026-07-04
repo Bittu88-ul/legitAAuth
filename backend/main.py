@@ -85,6 +85,9 @@ class AppSettingsRequest(BaseModel):
     version: str
     dev_message: Optional[str] = None
 
+class UserPasswordUpdateRequest(BaseModel):
+    new_password: str
+
 class UserCreateRequest(BaseModel):
     username: str
     password: str
@@ -295,6 +298,18 @@ def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depend
     log_app_action(db, app.id, "USER_BAN_TOGGLE", f"Changed status of user {user.username} to {user.status}")
     return {"message": f"User status changed to {user.status}"}
 
+@app.put("/api/creator/apps/{app_id}/users/{user_id}/password")
+def update_user_password(app_id: int, user_id: int, req: UserPasswordUpdateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
+    if not app: raise HTTPException(status_code=404, detail="App not found")
+    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
+    if not user: raise HTTPException(status_code=404, detail="User not found")
+    
+    user.password_hash = hash_password(req.new_password)
+    db.commit()
+    log_app_action(db, app.id, "USER_PASSWORD_CHANGED", f"Changed password for user {user.username}")
+    return {"message": "Password updated successfully"}
+
 @app.post("/api/creator/apps/{app_id}/licenses")
 def create_app_licenses(app_id: int, req: LicenseCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
@@ -363,6 +378,30 @@ def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_cre
     if not app: raise HTTPException(status_code=404, detail="App not found")
     logs = db.query(AppLog).filter(AppLog.app_id == app.id).order_by(AppLog.id.desc()).limit(50).all()
     return [{"id": l.id, "action": l.action, "description": l.description, "created_at": l.created_at.isoformat()} for l in logs]
+
+@app.delete("/api/creator/apps/{app_id}/clean-banned")
+def clean_banned_entities(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
+    if not app: raise HTTPException(status_code=404, detail="App not found")
+    
+    banned_users = db.query(AppUser).filter(AppUser.app_id == app_id, AppUser.status == "banned").all()
+    banned_lics = db.query(AppLicense).filter(AppLicense.app_id == app_id, AppLicense.status == "banned").all()
+    
+    user_count = len(banned_users)
+    lic_count = len(banned_lics)
+    
+    for u in banned_users:
+        db.delete(u)
+    for l in banned_lics:
+        db.delete(l)
+        
+    db.commit()
+    log_app_action(db, app.id, "CLEAN_BANNED", f"Cleaned {user_count} banned users and {lic_count} banned licenses")
+    return {
+        "message": f"Successfully deleted {user_count} banned users and {lic_count} banned licenses",
+        "users_deleted": user_count,
+        "licenses_deleted": lic_count
+    }
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
