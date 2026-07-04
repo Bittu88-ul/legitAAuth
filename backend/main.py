@@ -1,692 +1,966 @@
-import os
-import uuid
-import secrets
-import re
-from datetime import datetime, timedelta
-from typing import Optional, List
-from dotenv import load_dotenv
-from urllib.parse import urlencode
+const API_URL = '/api/creator';
+let currentAppId = null;
+let currentApps = [];
 
-# Load environment variables from both root and discord_bot directories
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", ".env"), override=True)
-from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, EmailStr
-from sqlalchemy.orm import Session
-import smtplib
-from email.mime.text import MIMEText
-import requests
-
-import sys
-import os
-# Add the current directory (backend) to sys.path so that database and auth_utils can be found
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from database import init_db, get_db, Creator, Application, AppUser, AppLicense, AppLog, OTP
-from auth_utils import hash_password, verify_password, create_access_token, verify_access_token
-
-app = FastAPI(title="LegitAuth System", version="1.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-import subprocess
-import sys
-
-@app.on_event("startup")
-def startup_event():
-    init_db()
+// Premium Toast Notification System
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
     
-    # Start the Discord Bot in the background
-    bot_token = os.getenv("DISCORD_BOT_TOKEN")
-    if bot_token and "YOUR_DISCORD_BOT_TOKEN_HERE" not in bot_token:
-        try:
-            bot_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", "bot.py")
-            print(f"Starting Discord Bot in the background: {bot_path}")
-            subprocess.Popen(
-                [sys.executable, bot_path],
-                cwd=os.path.dirname(bot_path),
-                env=os.environ.copy()
-            )
-        except Exception as e:
-            print(f"Failed to start Discord Bot: {e}")
-
-# --- Pydantic Schemas ---
-class EmailRequest(BaseModel):
-    email: EmailStr
-
-class OTPVerifyRequest(BaseModel):
-    email: EmailStr
-    otp: str
-    password: str
-    full_name: Optional[str] = None
-
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-class ResetPasswordRequest(BaseModel):
-    email: EmailStr
-    otp: str
-    new_password: str
-
-class CreatorLoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class AppCreateRequest(BaseModel):
-    app_name: str
-
-class AppSettingsRequest(BaseModel):
-    status: str
-    webhook_url: Optional[str] = None
-    version: str
-    dev_message: Optional[str] = None
-
-class UserCreateRequest(BaseModel):
-    username: str
-    password: str
-    expires_at: Optional[datetime] = None # Fully customizable duration
-    hwid_lock_enabled: bool = True
-
-class LicenseCreateRequest(BaseModel):
-    amount: int = 1
-    duration_days: int = 0
-    expires_at: Optional[datetime] = None
-    hwid_lock_enabled: bool = True
-
-class ClientRegisterRequest(BaseModel):
-    owner_id: str
-    secret: str
-    app_name: str
-    username: str
-    password: str
-    hwid: str
-
-class ClientLoginRequest(BaseModel):
-    owner_id: str
-    secret: str
-    app_name: str
-    username: Optional[str] = None
-    password: Optional[str] = None
-    license_key: Optional[str] = None
-    hwid: str
-
-class DiscordConfigRequest(BaseModel):
-    discord_guild_id: Optional[str] = None
-    discord_channel_id: Optional[str] = None
-    discord_guild_name: Optional[str] = None
-    discord_channel_name: Optional[str] = None
-
-# --- Authentication Dependency ---
-def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization Header")
-    try:
-        parts = authorization.split(" ")
-        if len(parts) != 2 or parts[0].lower() != "bearer":
-            raise HTTPException(status_code=401, detail="Invalid Authorization Header")
-        token = parts[1]
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid Authorization Header")
-
-    payload = verify_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Session expired")
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
     
-    creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
-    if not creator:
-        raise HTTPException(status_code=401, detail="Creator account not found")
-    return creator
-
-# --- Creator API Endpoints ---
-
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
-
-class GoogleLoginRequest(BaseModel):
-    token: str
-
-@app.post("/api/creator/google-login")
-def google_login(req: GoogleLoginRequest, db: Session = Depends(get_db)):
-    try:
-        # Verify the token with Google (with large clock skew tolerance for testing)
-        CLIENT_ID = "588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
-        idinfo = id_token.verify_oauth2_token(
-            req.token, 
-            google_requests.Request(), 
-            CLIENT_ID,
-            clock_skew_in_seconds=315360000 # 10 years tolerance
-        )
-        
-        email = idinfo.get('email')
-        google_id = idinfo.get('sub')
-        
-        if not email:
-            raise HTTPException(status_code=400, detail="No email provided by Google")
-
-        # Check if creator exists
-        creator = db.query(Creator).filter(Creator.email == email).first()
-        
-        if not creator:
-            # Create new creator
-            creator = Creator(email=email, is_verified=True, google_id=google_id)
-            db.add(creator)
-            db.commit()
-            db.refresh(creator)
-        else:
-            # Update google ID if not set
-            if not creator.google_id:
-                creator.google_id = google_id
-                creator.is_verified = True
-                db.commit()
-        
-        token = create_access_token(data={"email": creator.email, "id": creator.id})
-        return {"token": token, "email": creator.email}
-        
-    except ValueError as e:
-        print(f"Google Token Validation Error: {e}")
-        raise HTTPException(status_code=401, detail=f"Google Token Error: {e}")
-
-def log_app_action(db: Session, app_id: int, action: str, description: str):
-    new_log = AppLog(app_id=app_id, action=action, description=description)
-    db.add(new_log)
-    db.commit()
-
-@app.get("/api/creator/apps")
-def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name} for app in applications]
-
-@app.post("/api/creator/apps/create")
-def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    if not req.app_name or req.app_name.strip() == "":
-        raise HTTPException(status_code=400, detail="App name cannot be empty")
-        
-    owner_id = str(uuid.uuid4())
-    secret = secrets.token_hex(32)
-    new_app = Application(creator_id=current_creator.id, app_name=req.app_name.strip(), owner_id=owner_id, secret=secret)
-    db.add(new_app)
-    db.commit()
-    db.refresh(new_app)
-    return {"message": "Application created", "app": {"id": new_app.id, "app_name": new_app.app_name, "owner_id": new_app.owner_id, "secret": new_app.secret}}
-
-@app.delete("/api/creator/apps/{app_id}")
-def delete_app(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
+    let icon = 'fa-info-circle';
+    if (type === 'success') icon = 'fa-check-circle';
+    if (type === 'error') icon = 'fa-exclamation-circle';
     
-    db.delete(app)
-    db.commit()
-    return {"message": "Application deleted successfully"}
-
-@app.put("/api/creator/apps/{app_id}/settings")
-def update_app_settings(app_id: int, req: AppSettingsRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    app.status = req.status
-    app.webhook_url = req.webhook_url
-    app.version = req.version
-    app.dev_message = req.dev_message
-    db.commit()
-    return {"message": "Settings updated"}
-
-@app.post("/api/creator/apps/{app_id}/users")
-def add_app_user(app_id: int, req: UserCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="Application not found")
+    toast.innerHTML = `<i class="fas ${icon}"></i> <span>${message}</span>`;
+    container.appendChild(toast);
     
-    existing = db.query(AppUser).filter(AppUser.app_id == app.id, AppUser.username == req.username).first()
-    if existing: raise HTTPException(status_code=400, detail="Username already exists in this app")
-    
-    hashed = hash_password(req.password)
-    new_user = AppUser(app_id=app.id, username=req.username, password_hash=hashed, expires_at=req.expires_at, hwid_lock_enabled=req.hwid_lock_enabled)
-    db.add(new_user)
-    db.commit()
-    log_app_action(db, app.id, "USER_CREATED", f"Created user {req.username}")
-    return {"message": "User added successfully"}
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 
-@app.get("/api/creator/apps/{app_id}/users")
-def get_app_users(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    users = db.query(AppUser).filter(AppUser.app_id == app.id).order_by(AppUser.id.desc()).all()
-    return [{"id": u.id, "username": u.username, "hwid": u.hwid, "last_ip": u.last_ip, "hwid_lock": u.hwid_lock_enabled, "status": u.status, "expires_at": u.expires_at.isoformat() if u.expires_at else "Lifetime", "created_at": u.created_at} for u in users]
-
-@app.delete("/api/creator/apps/{app_id}/users/{user_id}")
-def delete_app_user(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
-    if not user: raise HTTPException(status_code=404, detail="User not found")
-    db.delete(user)
-    db.commit()
-    return {"message": "User deleted"}
-
-@app.post("/api/creator/apps/{app_id}/users/{user_id}/reset-hwid")
-def reset_user_hwid(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
-    if not user: raise HTTPException(status_code=404, detail="User not found")
-    user.hwid = None
-    db.commit()
-    log_app_action(db, app.id, "HWID_RESET", f"Reset HWID for user {user.username}")
-    return {"message": "HWID Reset Successful"}
-
-@app.post("/api/creator/apps/{app_id}/users/{user_id}/toggle-ban")
-def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
-    if not user: raise HTTPException(status_code=404, detail="User not found")
-    
-    user.status = "banned" if user.status == "active" else "active"
-    db.commit()
-    log_app_action(db, app.id, "USER_BAN_TOGGLE", f"Changed status of user {user.username} to {user.status}")
-    return {"message": f"User status changed to {user.status}"}
-
-@app.post("/api/creator/apps/{app_id}/licenses")
-def create_app_licenses(app_id: int, req: LicenseCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="Application not found")
-    
-    keys = []
-    for _ in range(req.amount):
-        # Generate format: XXXX-XXXX-XXXX-XXXX
-        key_str = "-".join([secrets.token_hex(2).upper() for _ in range(4)])
-        keys.append(key_str)
-        new_lic = AppLicense(
-            app_id=app.id,
-            license_key=key_str,
-            hwid_lock_enabled=req.hwid_lock_enabled,
-            expires_at=req.expires_at,
-            duration_days=req.duration_days
-        )
-        db.add(new_lic)
-    db.commit()
-    log_app_action(db, app.id, "LICENSE_GENERATED", f"Generated {req.amount} licenses ({req.duration_days} days)")
-    return {"message": f"{req.amount} licenses generated successfully", "keys": keys}
-
-@app.get("/api/creator/apps/{app_id}/licenses")
-def get_app_licenses(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    licenses = db.query(AppLicense).filter(AppLicense.app_id == app.id).order_by(AppLicense.id.desc()).all()
-    return [{"id": l.id, "license_key": l.license_key, "hwid": l.hwid, "last_ip": l.last_ip, "hwid_lock": l.hwid_lock_enabled, "status": l.status, "duration_days": l.duration_days, "expires_at": l.expires_at.isoformat() if l.expires_at else "Lifetime"} for l in licenses]
-
-@app.delete("/api/creator/apps/{app_id}/licenses/{license_id}")
-def delete_app_license(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic: raise HTTPException(status_code=404, detail="License not found")
-    db.delete(lic)
-    db.commit()
-    return {"message": "License deleted"}
-
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/reset-hwid")
-def reset_license_hwid(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic: raise HTTPException(status_code=404, detail="License not found")
-    lic.hwid = None
-    db.commit()
-    log_app_action(db, app.id, "HWID_RESET", f"Reset HWID for license {lic.license_key}")
-    return {"message": "HWID Reset Successful"}
-
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/toggle-ban")
-def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic: raise HTTPException(status_code=404, detail="License not found")
-    
-    lic.status = "banned" if lic.status == "active" else "active"
-    db.commit()
-    log_app_action(db, app.id, "LICENSE_BAN_TOGGLE", f"Changed status of license {lic.license_key} to {lic.status}")
-    return {"message": f"License status changed to {lic.status}"}
-
-@app.get("/api/creator/apps/{app_id}/logs")
-def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app: raise HTTPException(status_code=404, detail="App not found")
-    logs = db.query(AppLog).filter(AppLog.app_id == app.id).order_by(AppLog.id.desc()).limit(50).all()
-    return [{"id": l.id, "action": l.action, "description": l.description, "created_at": l.created_at.isoformat()} for l in logs]
-
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-
-@app.get("/api/creator/discord/resolve-invite")
-def resolve_discord_invite(invite: str, current_creator: Creator = Depends(get_current_creator)):
-    code = invite.strip().split("/")[-1]
-    res = requests.get(f"https://discord.com/api/v9/invites/{code}")
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Invalid Discord invite link or code")
-    data = res.json()
-    guild = data.get("guild")
-    if not guild:
-        raise HTTPException(status_code=400, detail="Invite is not for a server (guild)")
-    return {"guild_id": guild.get("id"), "guild_name": guild.get("name")}
-
-@app.get("/api/creator/discord/channels")
-def get_discord_channels(guild_id: str, current_creator: Creator = Depends(get_current_creator)):
-    if not DISCORD_BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="DISCORD_BOT_TOKEN not configured on server")
-    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-    res = requests.get(f"https://discord.com/api/v9/guilds/{guild_id}/channels", headers=headers)
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Could not fetch channels. Make sure the bot is invited to the server first.")
-    channels = res.json()
-    text_channels = [
-        {"id": c.get("id"), "name": c.get("name")}
-        for c in channels
-        if c.get("type") == 0
-    ]
-    return text_channels
-
-@app.put("/api/creator/apps/{app_id}/discord")
-def update_app_discord_config(app_id: int, req: DiscordConfigRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    app.discord_guild_id = req.discord_guild_id
-    app.discord_channel_id = req.discord_channel_id
-    app.discord_guild_name = req.discord_guild_name
-    app.discord_channel_name = req.discord_channel_name
-    db.commit()
-    return {"message": "Discord integration settings updated"}
-
-@app.get("/api/creator/discord/app-by-channel/{channel_id}")
-def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(
-        Application.creator_id == current_creator.id,
-        Application.discord_channel_id == channel_id
-    ).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="No application linked to this channel")
-    return {
-        "id": app.id,
-        "app_name": app.app_name,
-        "owner_id": app.owner_id,
-        "secret": app.secret,
-        "status": app.status,
-        "version": app.version,
-        "dev_message": app.dev_message
-    }
-
-# --- Discord OAuth2 Endpoints ---
-DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", os.getenv("LEGITAUTH_API_URL", "http://localhost:8000") + "/api/creator/discord/callback")
-DISCORD_BOT_PERMISSIONS = "8"  # Administrator permissions
-
-def refresh_discord_token(creator: Creator, db: Session):
-    # Check if token needs refresh
-    if not creator.discord_refresh_token:
-        raise HTTPException(status_code=400, detail="No Discord refresh token available")
-    
-    now = datetime.utcnow()
-    if creator.discord_token_expires_at and now < creator.discord_token_expires_at - timedelta(minutes=5):
-        return creator.discord_access_token
-    
-    # Refresh the token
-    data = {
-        "client_id": DISCORD_CLIENT_ID,
-        "client_secret": DISCORD_CLIENT_SECRET,
-        "grant_type": "refresh_token",
-        "refresh_token": creator.discord_refresh_token,
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    res = requests.post("https://discord.com/api/v10/oauth2/token", data=data, headers=headers)
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to refresh Discord token")
-    token_data = res.json()
-    
-    creator.discord_access_token = token_data["access_token"]
-    creator.discord_refresh_token = token_data.get("refresh_token", creator.discord_refresh_token)
-    creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=token_data["expires_in"])
-    db.commit()
-    return creator.discord_access_token
-
-@app.get("/api/creator/discord/login")
-def discord_login(current_creator: Creator = Depends(get_current_creator)):
-    if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
-        raise HTTPException(status_code=500, detail="Discord OAuth not configured")
-    # Get user's token so we can pass it in state
-    user_token = create_access_token(data={"email": current_creator.email, "id": current_creator.id})
-    scopes = "identify guilds"
-    url = (
-        f"https://discord.com/api/oauth2/authorize?response_type=code"
-        f"&client_id={DISCORD_CLIENT_ID}"
-        f"&redirect_uri={DISCORD_REDIRECT_URI}"
-        f"&scope={scopes}"
-        f"&state={user_token}"
-    )
-    return {"auth_url": url}
-
-@app.get("/api/creator/discord/callback")
-def discord_callback(code: Optional[str] = None, state: Optional[str] = None, guild_id: Optional[str] = None, permissions: Optional[str] = None, db: Session = Depends(get_db)):
-    try:
-        # If this is a bot invite callback (no state), just redirect to dashboard!
-        if not state:
-            return RedirectResponse(url="/#discord")
-        
-        if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
-            raise HTTPException(status_code=500, detail="Discord OAuth not configured")
-        
-        # Verify the token from state to get current creator
-        payload = verify_access_token(state)
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid state token")
-        
-        # Get creator from payload
-        creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
-        if not creator:
-            raise HTTPException(status_code=401, detail="Creator not found")
-        
-        # Exchange code for access token
-        data = {
-            "client_id": DISCORD_CLIENT_ID,
-            "client_secret": DISCORD_CLIENT_SECRET,
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": DISCORD_REDIRECT_URI,
+async function handleGoogleLogin(response) {
+    try {
+        const res = await fetch(`${API_URL}/google-login`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: response.credential})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('email', data.email);
+            showToast('Google Login successful!', 'success');
+            showDashboard();
+        } else {
+            showToast(data.detail || 'Google Login failed', 'error');
         }
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        res = requests.post("https://discord.com/api/v10/oauth2/token", data=data, headers=headers)
-        if res.status_code != 200:
-            print(f"Discord token exchange error: {res.status_code} {res.text}")
-            raise HTTPException(status_code=400, detail="Failed to get Discord token")
-        
-        token_data = res.json()
-        access_token = token_data["access_token"]
-        refresh_token = token_data.get("refresh_token")
-        expires_in = token_data["expires_in"]
-        
-        # Get Discord user info
-        user_res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
-        if user_res.status_code !=200:
-            print(f"Discord user info error: {user_res.status_code} {user_res.text}")
-            raise HTTPException(status_code=400, detail="Failed to get Discord user")
-        user_data = user_res.json()
-        
-        # Update creator
-        creator.discord_id = user_data["id"]
-        creator.discord_access_token = access_token
-        creator.discord_refresh_token = refresh_token
-        creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-        db.commit()
-        
-        # Redirect back to dashboard
-        return RedirectResponse(url="/#discord")
-    except Exception as e:
-        print(f"Discord callback error: {e}")
-        # Even if there's an error, still try to redirect to dashboard
-        return RedirectResponse(url="/#discord")
+    } catch (e) {
+        showToast('Error communicating with server during Google login', 'error');
+    }
+}
 
-@app.get("/api/creator/discord/me")
-def get_discord_me(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    if not current_creator.discord_id or not current_creator.discord_access_token:
-        raise HTTPException(status_code=404, detail="Discord not linked")
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('email');
+    document.getElementById('auth-container').style.display = 'block';
+    document.getElementById('dashboard-container').style.display = 'none';
+    showToast('Logged out successfully', 'info');
+}
+
+function showDashboard() {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('dashboard-container').style.display = 'flex';
     
-    token = refresh_discord_token(current_creator, db)
-    res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to get Discord user")
-    return res.json()
-
-@app.get("/api/creator/discord/guilds")
-def get_discord_guilds(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    if not current_creator.discord_id or not current_creator.discord_access_token:
-        raise HTTPException(status_code=404, detail="Discord not linked")
+    // Update Settings Profile Email & Token dynamically
+    const email = localStorage.getItem('email') || 'Unknown';
+    const emailSpan = document.getElementById('profile-email');
+    if (emailSpan) {
+        emailSpan.innerText = email;
+    }
+    const tokenInput = document.getElementById('profile-api-token');
+    if (tokenInput) {
+        tokenInput.value = localStorage.getItem('token') || '';
+    }
     
-    token = refresh_discord_token(current_creator, db)
-    res = requests.get("https://discord.com/api/v10/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to get guilds")
+    loadApps();
+    checkDiscordLink();
+}
+
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.getElementById(`${tabId}-tab`).style.display = 'block';
+    if (tabId === 'discord') {
+        checkDiscordLink();
+    }
+}
+
+async function loadApps() {
+    const token = localStorage.getItem('token');
+    if (!token) return logout();
     
-    # Filter guilds where user has MANAGE_GUILD or ADMINISTRATOR
-    # Permissions bit: 0x20 is MANAGE_GUILD, 0x8 is ADMINISTRATOR
-    guilds = []
-    for guild in res.json():
-        permissions = int(guild["permissions"])
-        if (permissions & 0x20) or (permissions & 0x8):
-            guilds.append(guild)
-    return guilds
+    // For google mock, just show empty
+    if(token === 'google_mock_token') {
+        document.getElementById('app-list').innerHTML = '<p style="color:var(--text-muted);">No apps (Google mock)</p>';
+        return;
+    }
 
-@app.get("/api/creator/discord/guilds/{guild_id}/channels")
-def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    # First get channels using bot token (since user might not have access, but bot does if in server)
-    if not DISCORD_BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="Discord bot token missing")
-    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
-    if res.status_code !=200:
-        raise HTTPException(status_code=400, detail="Could not get channels from bot, make sure bot is in the server")
-    channels = [c for c in res.json() if c["type"] ==0] # Only text channels
-    return channels
-
-@app.get("/api/creator/discord/invite-url")
-def get_bot_invite_url(guild_id: Optional[str] = None):
-    # Simple bot invite URL without OAuth user flow parameters that cause conflicts
-    base = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands"
-    if guild_id:
-        base += f"&guild_id={guild_id}&disable_guild_select=true"
-    return {"invite_url": base}
-
-
-def send_discord_webhook(url: str, message: str):
-    if not url: return
-    try:
-        requests.post(url, json={"content": message}, timeout=3)
-    except:
-        pass
-
-# --- Client API ---
-@app.post("/api/client/login")
-def client_login(req: ClientLoginRequest, request: Request, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.owner_id == req.owner_id, Application.secret == req.secret, Application.app_name == req.app_name).first()
-    if not app: raise HTTPException(status_code=400, detail="Invalid app credentials")
-    if app.status == "paused": 
-        log_app_action(db, app.id, "LOGIN_FAILED", "Failed login due to app maintenance mode")
-        raise HTTPException(status_code=503, detail="Application is under maintenance")
-    
-    client_ip = request.client.host
-    
-    if req.license_key:
-        # License Key Auth
-        lic = db.query(AppLicense).filter(AppLicense.app_id == app.id, AppLicense.license_key == req.license_key).first()
-        if not lic: 
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Invalid license key {req.license_key}")
-            raise HTTPException(status_code=400, detail="License key not found")
-        if lic.status == "banned": 
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Banned license tried to login: {req.license_key}")
-            raise HTTPException(status_code=403, detail="Banned")
+    try {
+        const res = await fetch(`${API_URL}/apps`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (!res.ok) throw new Error();
+        const apps = await res.json();
+        currentApps = apps;
         
-        # Check expiry
-        if lic.expires_at and datetime.utcnow() > lic.expires_at: 
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Expired license tried to login: {req.license_key}")
-            raise HTTPException(status_code=403, detail="Expired")
+        const list = document.getElementById('app-list');
+        const selector = document.getElementById('app-selector');
+        const discordSelector = document.getElementById('discord-app-selector');
+        
+        list.innerHTML = '';
+        if (selector) selector.innerHTML = '<option value="">-- Select an App --</option>';
+        if (discordSelector) discordSelector.innerHTML = '<option value="">-- Select an App to Integrate --</option>';
+        
+        // Update Dashboard Stats
+        document.getElementById('stat-apps').innerText = apps.length;
+        
+        let totalUsers = 0;
+        let totalLicenses = 0;
+
+        // Fetch counts for stats (Async all apps)
+        await Promise.all(apps.map(async app => {
+            try {
+                const uRes = await fetch(`${API_URL}/apps/${app.id}/users`, { headers: {'Authorization': `Bearer ${token}`} });
+                if(uRes.ok) { const u = await uRes.json(); totalUsers += u.length; }
+                
+                const lRes = await fetch(`${API_URL}/apps/${app.id}/licenses`, { headers: {'Authorization': `Bearer ${token}`} });
+                if(lRes.ok) { const l = await lRes.json(); totalLicenses += l.length; }
+            } catch(e){}
+        }));
+        
+        document.getElementById('stat-users').innerText = totalUsers;
+        document.getElementById('stat-licenses').innerText = totalLicenses;
+
+        apps.forEach(app => {
+            // App Tab Card
+            const div = document.createElement('div');
+            div.className = 'app-card';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0;"><i class="fas fa-cube" style="color:var(--primary); margin-right:8px;"></i>${app.app_name}</h3>
+                    <button onclick="deleteApp(event, ${app.id})" style="width:auto; padding:8px 15px; background:rgba(239, 68, 68, 0.2); color:#ef4444; border:1px solid #ef4444; box-shadow:none;"><i class="fas fa-trash"></i></button>
+                </div>
+                <div style="margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
+                    <p style="margin:5px 0;"><strong>Owner ID:</strong> <span style="color:white;">${app.owner_id}</span></p>
+                    <p style="margin:5px 0;"><strong>Secret:</strong> <span style="color:white;">${app.secret}</span></p>
+                </div>
+            `;
+            list.appendChild(div);
             
-        if not lic.hwid:
-            if lic.duration_days > 0:
-                lic.expires_at = datetime.utcnow() + timedelta(days=lic.duration_days)
-            if lic.hwid_lock_enabled:
-                lic.hwid = req.hwid
-            lic.last_ip = client_ip
-            db.commit()
-        elif lic.hwid_lock_enabled and lic.hwid != req.hwid:
-            log_app_action(db, app.id, "LOGIN_FAILED", f"HWID Mismatch for license: {req.license_key}")
-            raise HTTPException(status_code=400, detail="HWID Mismatch. Key tied to another machine.")
-        else:
-            lic.last_ip = client_ip
-            db.commit()
-            
-        log_app_action(db, app.id, "LOGIN_SUCCESS", f"License logged in: {lic.license_key}")
-        send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{lic.license_key}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
-            
-        return {"success": True, "message": "Logged in", "user": {"username": lic.license_key, "expires_at": lic.expires_at.isoformat() if lic.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
-    
-    elif req.username and req.password:
-        # User/Pass Auth
-        username = req.username.strip()
-        user = db.query(AppUser).filter(AppUser.app_id == app.id, AppUser.username == username).first()
-        if not user:
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Invalid user credentials: {username}")
-            raise HTTPException(status_code=400, detail="Invalid username or password")
-        if user.status == "banned":
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Banned user tried to login: {username}")
-            raise HTTPException(status_code=403, detail="Banned")
+            // Workspace Dropdown Option
+            if (selector) {
+                const opt = document.createElement('option');
+                opt.value = app.id;
+                opt.text = app.app_name;
+                selector.appendChild(opt);
+            }
 
-        if user.expires_at and datetime.utcnow() > user.expires_at:
-            log_app_action(db, app.id, "LOGIN_FAILED", f"Expired user tried to login: {username}")
-            raise HTTPException(status_code=403, detail="Expired")
-        if not verify_password(req.password, user.password_hash): raise HTTPException(status_code=400, detail="Invalid password")
+            // Discord Dropdown Option
+            if (discordSelector) {
+                const opt = document.createElement('option');
+                opt.value = app.id;
+                opt.text = app.app_name;
+                discordSelector.appendChild(opt);
+            }
+        });
         
-        if not user.hwid:
-            if user.hwid_lock_enabled:
-                user.hwid = req.hwid
-            user.last_ip = client_ip
-            db.commit()
-        elif user.hwid_lock_enabled and user.hwid != req.hwid:
-            log_app_action(db, app.id, "LOGIN_FAILED", f"HWID Mismatch for user: {req.username}")
-            raise HTTPException(status_code=400, detail="HWID Mismatch. Account tied to another machine.")
-        else:
-            user.last_ip = client_ip
-            db.commit()
-            
-        log_app_action(db, app.id, "LOGIN_SUCCESS", f"User logged in: {user.username}")
-        send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{user.username}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
-            
-        return {"success": True, "message": "Logged in", "user": {"username": user.username, "expires_at": user.expires_at.isoformat() if user.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
+        // Update Quick Setup after loading apps!
+        updateQuickSetup();
+    } catch (e) {
+        logout();
+    }
+}
+
+async function createApp() {
+    const app_name = document.getElementById('new-app-name').value.trim();
+    if (!app_name) return showToast('App name cannot be empty', 'error');
     
-    else:
-        raise HTTPException(status_code=400, detail="Provide either username/password or license_key")
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/create`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({app_name})
+        });
+        if (res.ok) {
+            document.getElementById('new-app-name').value = '';
+            showToast('Application created successfully!', 'success');
+            loadApps();
+        } else {
+            const data = await res.json();
+            showToast(data.detail, 'error');
+        }
+    } catch (e) {
+        showToast('Error creating app', 'error');
+    }
+}
 
-@app.get("/download/auth")
-def download_auth():
-    # Provide the C# SDK for download
-    cs_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client", "Auth.cs")
-    if os.path.exists(cs_file):
-        return FileResponse(cs_file, filename="Auth.cs")
-    return JSONResponse(status_code=404, content={"message": "Auth.cs not found"})
+async function deleteApp(event, appId) {
+    event.stopPropagation();
+    if (!confirm("Are you sure you want to delete this application? All users and licenses will be permanently lost.")) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/${appId}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            showToast('Application deleted.', 'info');
+            if (currentAppId === appId) {
+                const wsContent = document.getElementById('app-workspace-content');
+                if(wsContent) wsContent.style.display = 'none';
+                currentAppId = null;
+            }
+            loadApps();
+        } else {
+            const data = await res.json();
+            showToast(data.detail, 'error');
+        }
+    } catch (e) {
+        showToast('Error deleting app', 'error');
+    }
+}
 
-@app.get("/dashboard")
-def get_dashboard():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "dashboard.html"))
+async function switchWorkspaceApp(appId) {
+    if (!appId) {
+        document.getElementById('app-workspace-content').style.display = 'none';
+        currentAppId = null;
+        return;
+    }
+    
+    currentAppId = appId;
+    const app = currentApps.find(a => a.id == appId);
+    if(app) {
+        document.getElementById('settings-status').value = app.status || 'active';
+        document.getElementById('settings-webhook').value = app.webhook_url || '';
+        document.getElementById('settings-version').value = app.version || '1.0';
+        document.getElementById('settings-dev-msg').value = app.dev_message || '';
+    }
 
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+    document.getElementById('app-workspace-content').style.display = 'block';
+    showAppTab('users');
+    loadAppWorkspaceData();
+}
 
-@app.get("/")
-def redirect_to_dashboard():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "dashboard.html"))
+function loadAppWorkspaceData() {
+    loadUsers();
+    loadLicenses();
+    loadLogs();
+}
+
+function showAppTab(tab) {
+    document.querySelectorAll('.app-sub-tab').forEach(el => {
+        el.style.display = 'none';
+        el.classList.remove('slide-in');
+    });
+    const selectedTab = document.getElementById(`app-${tab}-tab`);
+    selectedTab.style.display = 'block';
+    
+    // Trigger animation
+    setTimeout(() => { selectedTab.classList.add('slide-in'); }, 10);
+    
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab-btn'));
+    const btn = document.getElementById(`btn-tab-${tab}`);
+    if(btn) btn.classList.add('active-tab-btn');
+}
+
+async function loadUsers() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/users`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const users = await res.json();
+        const list = document.getElementById('user-list');
+        let html = '<table class="pro-table" id="user-table"><tr><th>User</th><th>Last IP</th><th>HWID</th><th>Status/Lock</th><th>Expires At</th><th>Actions</th></tr>';
+        users.forEach(u => {
+            let statusBadge = u.status === 'banned' ? '<span style="color:var(--danger);font-size:12px;border:1px solid var(--danger);padding:2px 4px;border-radius:4px;">BANNED</span>' : '';
+            html += `<tr>
+                <td>${u.username} <button onclick="copyToClipboard('${u.username}')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0;width:auto;margin:0 5px;box-shadow:none;"><i class="fas fa-copy"></i></button></td>
+                <td><span style="color:var(--primary); font-family:monospace;">${u.last_ip || 'Never'}</span></td>
+                <td><span style="font-family:monospace; color:var(--text-muted);">${u.hwid ? u.hwid.substring(0,8)+'...' : 'Not Set'}</span></td>
+                <td>${statusBadge} ${u.hwid_lock ? '<span style="color:var(--success);"><i class="fas fa-lock"></i></span>' : '<span style="color:var(--danger);"><i class="fas fa-lock-open"></i></span>'}</td>
+                <td>${u.expires_at}</td>
+                <td>
+                    <button class="action-btn icon-btn" onclick="toggleBanUser(${u.id})" title="Ban/Unban"><i class="fas fa-gavel"></i></button>
+                    <button class="action-btn icon-btn" onclick="resetUserHWID(${u.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>
+                    <button class="action-btn icon-btn danger-btn" onclick="deleteUser(${u.id})" title="Delete User"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+        updateGrowthChart(users.length, null); // Basic chart update
+    } catch(e) {}
+}
+
+async function loadLicenses() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const licenses = await res.json();
+        const list = document.getElementById('license-list');
+        let html = '<table class="pro-table" id="license-table"><tr><th>Key</th><th>Last IP</th><th>Status/Lock</th><th>Duration</th><th>Expires</th><th>Actions</th></tr>';
+        licenses.forEach(l => {
+            let statusBadge = l.status === 'banned' ? '<span style="color:var(--danger);font-size:12px;border:1px solid var(--danger);padding:2px 4px;border-radius:4px;">BANNED</span>' : '';
+            html += `<tr>
+                <td><span style="font-family:monospace; color:var(--primary);">${l.license_key}</span> <button onclick="copyToClipboard('${l.license_key}')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0;width:auto;margin:0 5px;box-shadow:none;"><i class="fas fa-copy"></i></button></td>
+                <td><span style="font-family:monospace;">${l.last_ip || 'Never'}</span></td>
+                <td>${statusBadge} ${l.hwid_lock ? '<span style="color:var(--success);"><i class="fas fa-lock"></i></span>' : '<span style="color:var(--danger);"><i class="fas fa-lock-open"></i></span>'}</td>
+                <td>${l.duration_days} Days</td>
+                <td>${l.expires_at}</td>
+                <td>
+                    <button class="action-btn icon-btn" onclick="toggleBanLicense(${l.id})" title="Ban/Unban"><i class="fas fa-gavel"></i></button>
+                    <button class="action-btn icon-btn" onclick="resetLicenseHWID(${l.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>
+                    <button class="action-btn icon-btn danger-btn" onclick="deleteLicense(${l.id})" title="Delete License"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        list.innerHTML = html;
+        updateGrowthChart(null, licenses.length);
+    } catch(e) {}
+}
+
+async function addUser() {
+    const username = document.getElementById('new-user-name').value;
+    const password = document.getElementById('new-user-pass').value;
+    const expiry = document.getElementById('new-user-expiry').value;
+    const hwidLock = document.getElementById('new-user-hwid').checked;
+    const token = localStorage.getItem('token');
+    
+    if(!username || !password) return showToast('Username and Password required', 'error');
+
+    const payload = {username, password, hwid_lock_enabled: hwidLock};
+    if (expiry) {
+        payload.expires_at = new Date(expiry).toISOString();
+    }
+    
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/users`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            showToast('User created successfully!', 'success');
+            document.getElementById('new-user-name').value = '';
+            document.getElementById('new-user-pass').value = '';
+            loadUsers();
+            loadApps(); // Update dashboard stats
+        } else {
+            const data = await res.json();
+            showToast(data.detail, 'error');
+        }
+    } catch (e) {
+        showToast('Error adding user', 'error');
+    }
+}
+
+async function generateLicenses() {
+    const amount = parseInt(document.getElementById('new-lic-amount').value);
+    const duration = parseInt(document.getElementById('new-lic-days').value);
+    const hwidLock = document.getElementById('new-lic-hwid').checked;
+    const token = localStorage.getItem('token');
+    
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                amount: amount,
+                duration_days: duration,
+                hwid_lock_enabled: hwidLock
+            })
+        });
+        if (res.ok) {
+            showToast(`${amount} License(s) generated successfully!`, 'success');
+            loadLicenses();
+            loadApps(); // Update dashboard stats
+        } else {
+            const data = await res.json();
+            showToast(data.detail, 'error');
+        }
+    } catch (e) {
+        showToast('Error generating licenses', 'error');
+    }
+}
+
+async function resetUserHWID(id) {
+    if(!confirm('Reset HWID for this user?')) return;
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/users/${id}/reset-hwid`, {
+            method: 'POST',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('HWID Reset Successful', 'success'); loadUsers(); }
+        else showToast('Error resetting HWID', 'error');
+    } catch(e) {}
+}
+
+async function deleteUser(id) {
+    if(!confirm('Delete this user?')) return;
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/users/${id}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('User Deleted', 'info'); loadUsers(); }
+        else showToast('Error deleting user', 'error');
+    } catch(e) {}
+}
+
+async function resetLicenseHWID(id) {
+    if(!confirm('Reset HWID for this license?')) return;
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses/${id}/reset-hwid`, {
+            method: 'POST',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('HWID Reset Successful', 'success'); loadLicenses(); }
+        else showToast('Error resetting HWID', 'error');
+    } catch(e) {}
+}
+
+async function deleteLicense(id) {
+    if(!confirm('Delete this license?')) return;
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses/${id}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('License Deleted', 'info'); loadLicenses(); }
+        else showToast('Error deleting license', 'error');
+    } catch(e) {}
+}
+
+async function saveAppSettings() {
+    const status = document.getElementById('settings-status').value;
+    const webhook = document.getElementById('settings-webhook').value;
+    const version = document.getElementById('settings-version').value;
+    const devMsg = document.getElementById('settings-dev-msg').value;
+
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/settings`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({status: status, webhook_url: webhook, version: version, dev_message: devMsg})
+        });
+        if(res.ok) {
+            showToast('Settings saved successfully', 'success');
+            loadApps(); // Reload apps to get updated global state
+        } else {
+            showToast('Error saving settings', 'error');
+        }
+    } catch(e) {}
+}
+
+async function toggleBanUser(id) {
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/users/${id}/toggle-ban`, {
+            method: 'POST',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('User ban status toggled', 'success'); loadAppWorkspaceData(); }
+        else showToast('Error toggling ban', 'error');
+    } catch(e) {}
+}
+
+async function toggleBanLicense(id) {
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses/${id}/toggle-ban`, {
+            method: 'POST',
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        if(res.ok) { showToast('License ban status toggled', 'success'); loadAppWorkspaceData(); }
+        else showToast('Error toggling ban', 'error');
+    } catch(e) {}
+}
+
+async function loadLogs() {
+    try {
+        const res = await fetch(`${API_URL}/apps/${currentAppId}/logs`, {
+            headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+        });
+        const logs = await res.json();
+        const list = document.getElementById('log-list');
+        if(logs.length === 0) {
+            list.innerHTML = '<span style="color: var(--text-muted);">No activity logged yet...</span>';
+            return;
+        }
+        let html = '';
+        logs.forEach(l => {
+            let color = 'var(--text-muted)';
+            if(l.action.includes('SUCCESS') || l.action.includes('CREATED') || l.action.includes('GENERATED')) color = 'var(--success)';
+            if(l.action.includes('FAILED') || l.action.includes('BAN') || l.action.includes('DELETE')) color = 'var(--danger)';
+            
+            html += `<div style="margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">
+                <span style="color:#64748b;">[${new Date(l.created_at).toLocaleTimeString()}]</span> 
+                <span style="color:${color}; font-weight:bold;">[${l.action}]</span> 
+                <span style="color:#e2e8f0;">${l.description}</span>
+            </div>`;
+        });
+        list.innerHTML = html;
+    } catch(e) {}
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard!', 'info');
+    });
+}
+
+function filterTable(tableContainerId, query) {
+    const filter = query.toUpperCase();
+    const table = document.getElementById(tableContainerId).querySelector('table');
+    if(!table) return;
+    const tr = table.getElementsByTagName("tr");
+    for (let i = 1; i < tr.length; i++) {
+        const textContent = tr[i].textContent || tr[i].innerText;
+        if (textContent.toUpperCase().indexOf(filter) > -1) {
+            tr[i].style.display = "";
+        } else {
+            tr[i].style.display = "none";
+        }
+    }
+}
+
+function exportCSV(type) {
+    const tableContainerId = type === 'users' ? 'user-list' : 'license-list';
+    const table = document.getElementById(tableContainerId).querySelector('table');
+    if(!table) { showToast('No data to export', 'error'); return; }
+    
+    let csv = [];
+    const rows = table.querySelectorAll("tr");
+    
+    for (let i = 0; i < rows.length; i++) {
+        let row = [], cols = rows[i].querySelectorAll("td, th");
+        // Skip Actions column
+        for (let j = 0; j < cols.length - 1; j++) {
+            row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+        }
+        csv.push(row.join(","));
+    }
+    
+    const csvString = csv.join("\n");
+    const a = document.createElement('a');
+    a.href = 'data:attachment/csv,' + encodeURIComponent(csvString);
+    a.target = '_blank';
+    a.download = `LegitAuth_${type}_export.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function setTheme(color) {
+    document.documentElement.style.setProperty('--primary', color);
+    showToast('Theme updated!', 'success');
+}
+
+let dashboardChart = null;
+function updateGrowthChart(usersCount, licensesCount) {
+    const ctx = document.getElementById('growthChart');
+    if(!ctx) return;
+    
+    // We only update if we have both values, or we just randomly plot if incomplete for demo purposes
+    if(dashboardChart) {
+        if(usersCount !== null) dashboardChart.data.datasets[0].data = [Math.max(usersCount-5, 0), usersCount-2, usersCount];
+        if(licensesCount !== null) dashboardChart.data.datasets[1].data = [Math.max(licensesCount-10, 0), licensesCount-5, licensesCount];
+        dashboardChart.update();
+        return;
+    }
+    
+    dashboardChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['2 Days Ago', 'Yesterday', 'Today'],
+            datasets: [{
+                label: 'Users',
+                data: [0, 0, usersCount || 0],
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Licenses',
+                data: [0, 0, licensesCount || 0],
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: 'white' } } },
+            scales: {
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+}
+
+let resolvedGuildId = null;
+let resolvedGuildName = null;
+let currentDiscordGuilds = [];
+
+function updateQuickSetup() {
+    // Step 1 check
+    const step1Status = document.getElementById('step1-status');
+    const btnStep1 = document.getElementById('btn-step1');
+    const step2Status = document.getElementById('step2-status');
+    const btnStep2 = document.getElementById('btn-step2');
+    const step3Status = document.getElementById('step3-status');
+    const btnStep3 = document.getElementById('btn-step3');
+    
+    // Check if discord linked first
+    const token = localStorage.getItem('token');
+    fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}})
+        .then(async res => {
+            if (res.ok) {
+                // Step 1 complete!
+                step1Status.innerText = 'Complete';
+                step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                step1Status.style.color = '#10b981';
+                step1Status.style.borderColor = '#10b981';
+                btnStep1.disabled = true;
+                btnStep1.style.opacity = 0.5;
+                
+                // Now step 2 unlocked!
+                step2Status.innerText = 'Pending';
+                step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
+                step2Status.style.color = '#ef4444';
+                step2Status.style.borderColor = '#ef4444';
+                btnStep2.style.opacity = 1;
+                btnStep2.style.pointerEvents = 'auto';
+                
+                // Super clean bot invite URL - no extra parameters!
+                btnStep2.href = "https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
+                
+                // Mark step 3 as pending
+                step3Status.innerText = 'Pending';
+                step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
+                step3Status.style.color = '#ef4444';
+                step3Status.style.borderColor = '#ef4444';
+                
+                // Check if there are any apps with discord linked to mark step3 complete
+                if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
+                    step3Status.innerText = 'Complete!';
+                    step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                    step3Status.style.color = '#10b981';
+                    step3Status.style.borderColor = '#10b981';
+                    btnStep3.style.opacity = 1;
+                    btnStep3.style.pointerEvents = 'auto';
+                    step2Status.innerText = 'Complete';
+                    step2Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                    step2Status.style.color = '#10b981';
+                    step2Status.style.borderColor = '#10b981';
+                }
+            }
+        });
+}
+
+async function checkDiscordLink() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}});
+        if (res.ok) {
+            const userData = await res.json();
+            document.getElementById('discord-link-status').style.display = 'none';
+            document.getElementById('discord-linked-status').style.display = 'block';
+            document.getElementById('discord-user-tag').innerText = userData.username + '#' + (userData.discriminator || '0');
+            await loadDiscordGuilds();
+            updateQuickSetup();
+        }
+    } catch(e) {
+        // Discord not linked
+        document.getElementById('discord-link-status').style.display = 'block';
+        document.getElementById('discord-linked-status').style.display = 'none';
+    }
+}
+
+async function linkDiscordAccount() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/discord/login`, {headers: {'Authorization': `Bearer ${token}`}});
+        if (res.ok) {
+            const data = await res.json();
+            window.location.href = data.auth_url;
+        }
+    } catch(e) {
+        showToast('Error initiating Discord link', 'error');
+    }
+}
+
+async function loadDiscordGuilds() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/discord/guilds`, {headers: {'Authorization': `Bearer ${token}`}});
+        if (res.ok) {
+            const guilds = await res.json();
+            currentDiscordGuilds = guilds;
+            const guildSelector = document.getElementById('discord-guild-selector');
+            guildSelector.innerHTML = '<option value="">-- Select Server --</option>';
+            guilds.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.text = g.name;
+                guildSelector.appendChild(opt);
+            });
+            showToast(`Loaded ${guilds.length} servers!`, 'info');
+        } else {
+            throw new Error();
+        }
+    } catch(e) {
+        showToast('Could not load Discord servers', 'error');
+    }
+}
+
+async function onDiscordGuildSelect(guildId) {
+    if (!guildId) {
+        document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
+        document.getElementById('discord-invite-link').href = 'https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
+        return;
+    }
+    
+    resolvedGuildId = guildId;
+    const guild = currentDiscordGuilds.find(g => g.id == guildId);
+    if (guild) resolvedGuildName = guild.name;
+    
+    // Update invite link (super clean, no extra parameters)
+    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
+    document.getElementById('discord-invite-link').href = inviteUrl;
+    
+    // Also update quick setup button's link!
+    const quickSetupBtn2 = document.getElementById('btn-step2');
+    if (quickSetupBtn2) {
+        quickSetupBtn2.href = inviteUrl;
+    }
+    
+    // Load channels
+    await loadDiscordGuildChannels(guildId);
+}
+
+async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
+    const token = localStorage.getItem('token');
+    const selector = document.getElementById('discord-channel-selector');
+    selector.innerHTML = '<option value="">-- Loading Channels --</option>';
+    
+    try {
+        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/channels`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const channels = await res.json();
+            selector.innerHTML = '<option value="">-- Choose Channel --</option>';
+            channels.forEach(ch => {
+                const opt = document.createElement('option');
+                opt.value = ch.id;
+                opt.text = `#${ch.name}`;
+                if (selectedChannelId && ch.id == selectedChannelId) {
+                    opt.selected = true;
+                }
+                selector.appendChild(opt);
+            });
+        } else {
+            const data = await res.json();
+            selector.innerHTML = '<option value="">-- Invite bot first, then refresh --</option>';
+            showToast(data.detail || 'Make sure the Bot is in your server!', 'warning');
+        }
+    } catch(e) {
+        selector.innerHTML = '<option value="">-- Error loading channels --</option>';
+    }
+}
+
+async function switchDiscordApp(appId) {
+    if (!appId) {
+        document.getElementById('discord-integration-details').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('discord-integration-details').style.display = 'block';
+    
+    const app = currentApps.find(a => a.id == appId);
+    if (!app) return;
+    
+    const statusText = document.getElementById('discord-status-text');
+    const statusBadge = document.getElementById('discord-status-badge');
+    const unlinkBtn = document.getElementById('discord-unlink-btn');
+    
+    if (app.discord_guild_id && app.discord_channel_id) {
+        statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
+        statusBadge.innerText = 'Active';
+        statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+        statusBadge.style.color = '#10b981';
+        statusBadge.style.borderColor = '#10b981';
+        unlinkBtn.style.display = 'inline-block';
+        
+        // Populate the guild selector
+        resolvedGuildId = app.discord_guild_id;
+        resolvedGuildName = app.discord_guild_name;
+        const guildSelector = document.getElementById('discord-guild-selector');
+        const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
+        if (!existingOption) {
+            const opt = document.createElement('option');
+            opt.value = resolvedGuildId;
+            opt.text = resolvedGuildName;
+            guildSelector.appendChild(opt);
+        }
+        guildSelector.value = resolvedGuildId;
+        
+        // Set invite url
+        const token = localStorage.getItem('token');
+        try {
+            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
+            if (resInvite.ok) {
+                const data = await resInvite.json();
+                document.getElementById('discord-invite-link').href = data.invite_url;
+            }
+        } catch(e) {}
+        
+        // Load channels
+        await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
+    } else {
+        statusText.innerText = 'Not Configured';
+        statusBadge.innerText = 'Inactive';
+        statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+        statusBadge.style.color = '#ef4444';
+        statusBadge.style.borderColor = '#ef4444';
+        unlinkBtn.style.display = 'none';
+    }
+}
+
+async function resolveDiscordInvite() {
+    const invite = document.getElementById('discord-invite-input').value.trim();
+    if (!invite) return showToast('Please enter an invite link or code', 'error');
+    
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/discord/resolve-invite?invite=${encodeURIComponent(invite)}`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const data = await res.json();
+        if (res.ok) {
+            resolvedGuildId = data.guild_id;
+            resolvedGuildName = data.guild_name;
+            
+            // Load into selector
+            const guildSelector = document.getElementById('discord-guild-selector');
+            const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
+            if (!existingOption) {
+                const opt = document.createElement('option');
+                opt.value = resolvedGuildId;
+                opt.text = resolvedGuildName;
+                guildSelector.appendChild(opt);
+            }
+            guildSelector.value = resolvedGuildId;
+            
+            // Set invite URL
+            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
+            if (resInvite.ok) {
+                const inviteData = await resInvite.json();
+                document.getElementById('discord-invite-link').href = inviteData.invite_url;
+            }
+            
+            showToast('Discord server found!', 'success');
+            
+            // Fetch channels
+            await loadDiscordGuildChannels(resolvedGuildId);
+        } else {
+            showToast(data.detail || 'Could not resolve invite link', 'error');
+        }
+    } catch(e) {
+        showToast('Error resolving invite', 'error');
+    }
+}
+
+async function loadDiscordChannels(guildId, selectedChannelId = null) {
+    await loadDiscordGuildChannels(guildId, selectedChannelId);
+}
+
+async function saveDiscordConfig() {
+    const appId = document.getElementById('discord-app-selector').value;
+    const channelId = document.getElementById('discord-channel-selector').value;
+    const channelSelector = document.getElementById('discord-channel-selector');
+    const channelName = channelSelector.options[channelSelector.selectedIndex]?.text.replace('#', '') || '';
+    
+    if (!channelId) return showToast('Please select an operating channel', 'error');
+    
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/${appId}/discord`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                discord_guild_id: resolvedGuildId,
+                discord_channel_id: channelId,
+                discord_guild_name: resolvedGuildName,
+                discord_channel_name: channelName
+            })
+        });
+        if (res.ok) {
+            showToast('Discord configuration saved successfully!', 'success');
+            await loadApps();
+            // Re-select to update the status card view
+            document.getElementById('discord-app-selector').value = appId;
+            await switchDiscordApp(appId);
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Failed to save configuration', 'error');
+        }
+    } catch(e) {
+        showToast('Error saving Discord config', 'error');
+    }
+}
+
+async function unlinkDiscordConfig() {
+    if (!confirm('Are you sure you want to unlink Discord from this application?')) return;
+    
+    const appId = document.getElementById('discord-app-selector').value;
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`${API_URL}/apps/${appId}/discord`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                discord_guild_id: null,
+                discord_channel_id: null,
+                discord_guild_name: null,
+                discord_channel_name: null
+            })
+        });
+        if (res.ok) {
+            showToast('Discord integration removed.', 'info');
+            await loadApps();
+            // Re-select to update UI
+            document.getElementById('discord-app-selector').value = appId;
+            await switchDiscordApp(appId);
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Failed to unlink', 'error');
+        }
+    } catch(e) {
+        showToast('Error unlinking Discord integration', 'error');
+    }
+}
+
+// Check auth on load
+if (localStorage.getItem('token')) {
+    showDashboard();
+}
