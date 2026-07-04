@@ -159,8 +159,6 @@ async function loadApps() {
             }
         });
         
-        // Update Quick Setup after loading apps!
-        updateQuickSetup();
     } catch (e) {
         logout();
     }
@@ -640,60 +638,6 @@ async function setBotInviteLink(elementId, guildId = null) {
     if (url) el.href = url;
 }
 
-function updateQuickSetup() {
-    // Step 1 check
-    const step1Status = document.getElementById('step1-status');
-    const btnStep1 = document.getElementById('btn-step1');
-    const step2Status = document.getElementById('step2-status');
-    const btnStep2 = document.getElementById('btn-step2');
-    const step3Status = document.getElementById('step3-status');
-    const btnStep3 = document.getElementById('btn-step3');
-    
-    // Check if discord linked first
-    const token = localStorage.getItem('token');
-    fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}})
-        .then(async res => {
-            if (res.ok) {
-                // Step 1 complete!
-                step1Status.innerText = 'Complete';
-                step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                step1Status.style.color = '#10b981';
-                step1Status.style.borderColor = '#10b981';
-                btnStep1.disabled = true;
-                btnStep1.style.opacity = 0.5;
-                
-                // Now step 2 unlocked!
-                step2Status.innerText = 'Pending';
-                step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
-                step2Status.style.color = '#ef4444';
-                step2Status.style.borderColor = '#ef4444';
-                btnStep2.style.opacity = 1;
-                btnStep2.style.pointerEvents = 'auto';
-                setBotInviteLink('btn-step2');
-                
-                // Mark step 3 as pending
-                step3Status.innerText = 'Pending';
-                step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
-                step3Status.style.color = '#ef4444';
-                step3Status.style.borderColor = '#ef4444';
-                
-                // Check if there are any apps with discord linked to mark step3 complete
-                if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
-                    step3Status.innerText = 'Complete!';
-                    step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                    step3Status.style.color = '#10b981';
-                    step3Status.style.borderColor = '#10b981';
-                    btnStep3.style.opacity = 1;
-                    btnStep3.style.pointerEvents = 'auto';
-                    step2Status.innerText = 'Complete';
-                    step2Status.style.background = 'rgba(16, 185, 129, 0.2)';
-                    step2Status.style.color = '#10b981';
-                    step2Status.style.borderColor = '#10b981';
-                }
-            }
-        });
-}
-
 async function checkDiscordLink() {
     const token = localStorage.getItem('token');
     try {
@@ -704,7 +648,6 @@ async function checkDiscordLink() {
             document.getElementById('discord-linked-status').style.display = 'block';
             document.getElementById('discord-user-tag').innerText = userData.username + '#' + (userData.discriminator || '0');
             await loadDiscordGuilds();
-            updateQuickSetup();
         }
     } catch(e) {
         // Discord not linked
@@ -762,7 +705,6 @@ async function onDiscordGuildSelect(guildId) {
     if (guild) resolvedGuildName = guild.name;
     
     await setBotInviteLink('discord-invite-link', guildId);
-    await setBotInviteLink('btn-step2', guildId);
     
     // Load channels
     await loadDiscordGuildChannels(guildId);
@@ -921,7 +863,6 @@ async function saveDiscordConfig() {
             // Re-select to update the status card view
             document.getElementById('discord-app-selector').value = appId;
             await switchDiscordApp(appId);
-            updateQuickSetup(); // Also update the quick setup steps!
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to save configuration', 'error');
@@ -956,7 +897,6 @@ async function unlinkDiscordConfig() {
             // Re-select to update UI
             document.getElementById('discord-app-selector').value = appId;
             await switchDiscordApp(appId);
-            updateQuickSetup();
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to unlink', 'error');
