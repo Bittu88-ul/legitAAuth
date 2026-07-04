@@ -273,16 +273,7 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                     </div>
                 </div>
                 
-                <!-- Your API Token (LegitAuth) -->
-                <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); margin-bottom:20px;">
-                    <h3 style="margin-bottom:15px; color: white;"><i class="fas fa-key" style="margin-right:8px;"></i>Your API Token (LegitAuth)</h3>
-                    <p style="color: var(--text-muted); margin-bottom:8px;">Ye token Discord bot ko backend se communicate karne ke liye chahiye:</p>
-                    <div style="display:flex; gap:10px; margin-bottom:10px;">
-                        <input type="text" id="profile-api-token" readonly style="flex:1; background: rgba(0,0,0,0.5); color: white; font-family: monospace; padding:10px; border-radius:8px; border:1px solid var(--glass-border);" />
-                        <button onclick="copyToClipboard(document.getElementById('profile-api-token').value)" style="width:auto; padding:0 20px; height:46px;"><i class="fas fa-copy"></i></button>
-                        <button onclick="regenerateApiToken()" style="width:auto; padding:0 20px; height:46px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border:1px solid #ef4444;"><i class="fas fa-sync-alt"></i></button>
-                    </div>
-                </div>
+
 
                 <!-- Discord Setup & Config -->
                 <div id="discord-integration-details">
