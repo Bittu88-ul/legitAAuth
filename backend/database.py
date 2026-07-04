@@ -33,6 +33,7 @@ class Creator(Base):
     discord_access_token = Column(String, nullable=True)
     discord_refresh_token = Column(String, nullable=True)
     discord_token_expires_at = Column(DateTime, nullable=True)
+    api_token = Column(String, unique=True, nullable=True)  # Permanent API token for Discord bot
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -191,6 +192,12 @@ def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE creators ADD COLUMN discord_token_expires_at DATETIME"))
+    except Exception:
+        pass
+    # Add api_token column to creators
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE creators ADD COLUMN api_token VARCHAR"))
     except Exception:
         pass
 
