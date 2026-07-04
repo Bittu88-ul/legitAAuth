@@ -227,7 +227,7 @@ async def list_apps(interaction: discord.Interaction):
 @tree.command(name="select_app", description="Select an application to manage")
 @app_commands.describe(app_id="Application ID from `/list_apps`")
 async def select_app(interaction: discord.Interaction, app_id: int):
-    url = f"{API_URL}/apps"
+    url = f"{API_BASE}/apps"
     res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
     if res.status_code != 200:
         await interaction.response.send_message("❌ Could not verify app! Did you link your token with `/link_token`?", ephemeral=True)
