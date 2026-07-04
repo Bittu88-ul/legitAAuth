@@ -62,25 +62,6 @@ def get_current_app(interaction: discord.Interaction):
         app = get_linked_app(interaction.channel_id, interaction.user.id)
     return app
 
-# Global check to see if command should run
-async def is_valid_channel(interaction: discord.Interaction) -> bool:
-    # Always allow link_token, unlink_token, list_apps, and select_app commands in any channel
-    if interaction.command.name in ["link_token", "unlink_token", "list_apps", "select_app"]:
-        return True
-    
-    # Check if current channel is linked OR user has selected an app
-    app = get_current_app(interaction)
-    if not app:
-        await interaction.response.send_message(
-            "❌ This bot only responds in linked channels! Please link a channel in the dashboard or use /link_token and /select_app.",
-            ephemeral=True
-        )
-        return False
-    return True
-
-# Add global check to all commands
-tree.add_check(is_valid_channel)
-
 # New commands for linking/unlinking token
 @tree.command(name="link_token", description="Link your LegitAuth API token to use the bot")
 @app_commands.describe(api_token="Your API token from LegitAuth Settings tab")
@@ -363,6 +344,29 @@ async def list_logs(interaction: discord.Interaction):
             inline=False
         )
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# Global check for commands (except link_token and unlink_token)
+async def channel_check(interaction: discord.Interaction):
+    # Allow link_token and unlink_token in any channel
+    if interaction.command and interaction.command.name in ["link_token", "unlink_token"]:
+        return True
+    
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("❌ No app linked to this channel. Please link a channel in the dashboard first.", ephemeral=True)
+        return False
+    
+    # Check if current channel is the linked channel for the app
+    if app.get("discord_channel_id") and str(interaction.channel_id) != app["discord_channel_id"]:
+        await interaction.response.send_message(f"❌ This bot only works in <#{app['discord_channel_id']}> for the app **{app['app_name']}**.", ephemeral=True)
+        return False
+    
+    return True
+
+# Apply the check to all commands except link_token and unlink_token
+for command in tree.get_commands():
+    if command.name not in ["link_token", "unlink_token"]:
+        command.checks.append(channel_check)
 
 @client.event
 async def on_ready():
