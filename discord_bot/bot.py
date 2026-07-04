@@ -6,7 +6,9 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+# First try loading from the current directory, then parent directory (root .env)
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_BASE = os.getenv('LEGITAUTH_API_URL', 'http://localhost:8000/api/creator')
 DEFAULT_API_TOKEN = os.getenv('DEFAULT_API_TOKEN', '')
@@ -50,8 +52,20 @@ user_selected_app: dict[str, dict] = load_user_selected_apps()
 
 def api_headers_for_user(user_id: int):
     user_id_str = str(user_id)
-    token = user_tokens.get(user_id_str, DEFAULT_API_TOKEN)
-    return {"Authorization": f"Bearer {token}"}
+    # Check if we have a locally linked token first
+    token = user_tokens.get(user_id_str)
+    
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    else:
+        # Fall back to bot authentication using shared credentials
+        bot_token = os.getenv('LEGITAUTH_API_TOKEN') or os.getenv('DEFAULT_API_TOKEN') or os.getenv('DISCORD_BOT_TOKEN')
+        if bot_token:
+            headers["Authorization"] = f"Bearer {bot_token}"
+        headers["X-Discord-User-Id"] = user_id_str
+        
+    return headers
 
 def get_linked_app(channel_id: int, user_id: int):
     url = f"{API_BASE}/discord/app-by-channel/{channel_id}"
@@ -81,10 +95,33 @@ tree = app_commands.CommandTree(client)
 # List of commands that don't require an app at all
 COMMANDS_NO_APP_NEEDED = ["help", "link_token", "unlink_token", "list_apps", "select_app", "ping", "info"]
 
+def is_channel_allowed(interaction: discord.Interaction) -> bool:
+    try:
+        url = f"{API_BASE}/apps"
+        res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+        if res.status_code == 200:
+            apps = res.json()
+            configured_channels = {app["discord_channel_id"] for app in apps if app.get("discord_channel_id")}
+            if configured_channels:
+                # If there are configured channels, current channel MUST be one of them
+                return str(interaction.channel_id) in configured_channels
+        elif res.status_code == 401:
+            # User is not linked to any account yet, allow basic commands to get started
+            return True
+    except Exception as e:
+        print(f"Error checking channel allowance: {e}")
+    
+    return True
+
 def check_command_allowed(interaction: discord.Interaction):
     if not interaction.command:
         return True, None
     command_name = interaction.command.name
+    
+    # 1. Enforce global channel restriction first
+    if not is_channel_allowed(interaction):
+        return False, "This bot is configured to ignore commands in this channel."
+        
     if command_name in COMMANDS_NO_APP_NEEDED:
         return True, None
     
@@ -98,6 +135,15 @@ def check_command_allowed(interaction: discord.Interaction):
             return False, f"This bot only works in <#{app['discord_channel_id']}> for the app **{app['app_name']}**!"
     
     return True, None
+
+@tree.interaction_check
+async def tree_interaction_check(interaction: discord.Interaction) -> bool:
+    allowed, error_msg = check_command_allowed(interaction)
+    if not allowed:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(f"❌ {error_msg}", ephemeral=True)
+        return False
+    return True
 
 # --- Bot Events ---
 @client.event
