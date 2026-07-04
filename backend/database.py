@@ -65,6 +65,11 @@ class Application(Base):
     discord_channel_id = Column(String, nullable=True)
     discord_guild_name = Column(String, nullable=True)
     discord_channel_name = Column(String, nullable=True)
+    discord_log_enabled = Column(Boolean, default=False)
+    discord_welcome_enabled = Column(Boolean, default=False)
+    discord_welcome_msg = Column(String, default="Welcome to the Server!")
+    discord_role_on_register = Column(String, nullable=True)
+    discord_dm_notifications = Column(Boolean, default=True)
 
     # Relationships
     creator = relationship("Creator", back_populates="applications")
@@ -138,6 +143,31 @@ def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE applications ADD COLUMN discord_channel_name VARCHAR"))
+    except Exception:
+        pass
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_log_enabled BOOLEAN DEFAULT 0"))
+    except Exception:
+        pass
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_welcome_enabled BOOLEAN DEFAULT 0"))
+    except Exception:
+        pass
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_welcome_msg VARCHAR DEFAULT 'Welcome to the Server!'"))
+    except Exception:
+        pass
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_role_on_register VARCHAR"))
+    except Exception:
+        pass
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT 1"))
     except Exception:
         pass
     # Add Discord OAuth fields to creators
