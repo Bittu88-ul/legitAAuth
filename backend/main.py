@@ -470,52 +470,58 @@ def discord_login(current_creator: Creator = Depends(get_current_creator)):
 
 @app.get("/api/creator/discord/callback")
 def discord_callback(code: str, state: str, db: Session = Depends(get_db)):
-    if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
-        raise HTTPException(status_code=500, detail="Discord OAuth not configured")
-    
-    # Verify the token from state to get current creator
-    payload = verify_access_token(state)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid state token")
-    
-    # Get creator from payload
-    creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
-    if not creator:
-        raise HTTPException(status_code=401, detail="Creator not found")
-    
-    # Exchange code for access token
-    data = {
-        "client_id": DISCORD_CLIENT_ID,
-        "client_secret": DISCORD_CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": DISCORD_REDIRECT_URI,
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    res = requests.post("https://discord.com/api/v10/oauth2/token", data=data, headers=headers)
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to get Discord token")
-    
-    token_data = res.json()
-    access_token = token_data["access_token"]
-    refresh_token = token_data.get("refresh_token")
-    expires_in = token_data["expires_in"]
-    
-    # Get Discord user info
-    user_res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
-    if user_res.status_code !=200:
-        raise HTTPException(status_code=400, detail="Failed to get Discord user")
-    user_data = user_res.json()
-    
-    # Update creator
-    creator.discord_id = user_data["id"]
-    creator.discord_access_token = access_token
-    creator.discord_refresh_token = refresh_token
-    creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-    db.commit()
-    
-    # Redirect back to dashboard
-    return RedirectResponse(url="/#discord")
+    try:
+        if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
+            raise HTTPException(status_code=500, detail="Discord OAuth not configured")
+        
+        # Verify the token from state to get current creator
+        payload = verify_access_token(state)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid state token")
+        
+        # Get creator from payload
+        creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
+        if not creator:
+            raise HTTPException(status_code=401, detail="Creator not found")
+        
+        # Exchange code for access token
+        data = {
+            "client_id": DISCORD_CLIENT_ID,
+            "client_secret": DISCORD_CLIENT_SECRET,
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": DISCORD_REDIRECT_URI,
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        res = requests.post("https://discord.com/api/v10/oauth2/token", data=data, headers=headers)
+        if res.status_code != 200:
+            print(f"Discord token exchange error: {res.status_code} {res.text}")
+            raise HTTPException(status_code=400, detail="Failed to get Discord token")
+        
+        token_data = res.json()
+        access_token = token_data["access_token"]
+        refresh_token = token_data.get("refresh_token")
+        expires_in = token_data["expires_in"]
+        
+        # Get Discord user info
+        user_res = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
+        if user_res.status_code !=200:
+            print(f"Discord user info error: {user_res.status_code} {user_res.text}")
+            raise HTTPException(status_code=400, detail="Failed to get Discord user")
+        user_data = user_res.json()
+        
+        # Update creator
+        creator.discord_id = user_data["id"]
+        creator.discord_access_token = access_token
+        creator.discord_refresh_token = refresh_token
+        creator.discord_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        db.commit()
+        
+        # Redirect back to dashboard
+        return RedirectResponse(url="/#discord")
+    except Exception as e:
+        print(f"Discord callback error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/creator/discord/me")
 def get_discord_me(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
