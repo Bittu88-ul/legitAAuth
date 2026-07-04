@@ -13,6 +13,7 @@ DEFAULT_API_TOKEN = os.getenv('DEFAULT_API_TOKEN', '')
 
 # File to store user tokens
 USER_TOKENS_FILE = os.path.join(os.path.dirname(__file__), "user_tokens.json")
+USER_SELECTED_APP_FILE = os.path.join(os.path.dirname(__file__), "user_selected_app.json")
 
 # Load existing tokens if file exists
 def load_user_tokens():
@@ -29,34 +30,47 @@ def save_user_tokens(tokens):
     with open(USER_TOKENS_FILE, "w") as f:
         json.dump(tokens, f)
 
+def load_user_selected_apps():
+    if os.path.exists(USER_SELECTED_APP_FILE):
+        try:
+            with open(USER_SELECTED_APP_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading user selected apps: {e}")
+            return {}
+    return {}
+
+def save_user_selected_apps(apps):
+    with open(USER_SELECTED_APP_FILE, "w") as f:
+        json.dump(apps, f)
+
 # Load tokens on start
-user_tokens: dict[str, str] = load_user_tokens()  # key: str(user_id), value: api_token
-user_selected_app: dict[int, dict] = {}
+user_tokens: dict[str, str] = load_user_tokens()
+user_selected_app: dict[str, dict] = load_user_selected_apps()
 
 def api_headers_for_user(user_id: int):
     user_id_str = str(user_id)
     token = user_tokens.get(user_id_str, DEFAULT_API_TOKEN)
     return {"Authorization": f"Bearer {token}"}
 
-def api_headers():
-    return {"Authorization": f"Bearer {DEFAULT_API_TOKEN}"}
-
 def get_linked_app(channel_id: int, user_id: int):
     url = f"{API_BASE}/discord/app-by-channel/{channel_id}"
     try:
-        resp = requests.get(url, headers=api_headers_for_user(user_id))
-        if resp.status_code == 200:
-            return resp.json()
+        res = requests.get(url, headers=api_headers_for_user(user_id))
+        if res.status_code == 200:
+            return res.json()
     except Exception as e:
         print(f"Error getting linked app: {e}")
         pass
     return None
 
 def get_current_app(interaction: discord.Interaction):
-    app = user_selected_app.get(interaction.user.id)
-    if not app:
-        app = get_linked_app(interaction.channel_id, interaction.user.id)
-    return app
+    user_id_str = str(interaction.user.id)
+    # First check if user selected an app manually
+    if user_id_str in user_selected_app:
+        return user_selected_app[user_id_str]
+    # Then check if channel is linked
+    return get_linked_app(interaction.channel_id, interaction.user.id)
 
 # Initialize bot
 intents = discord.Intents.default()
@@ -64,21 +78,24 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# List of commands that don't require a linked app
-COMMANDS_NO_APP_REQUIRED = ["help", "link_token", "unlink_token", "list_apps", "select_app", "ping", "info"]
+# List of commands that don't require an app at all
+COMMANDS_NO_APP_NEEDED = ["help", "link_token", "unlink_token", "list_apps", "select_app", "ping", "info"]
 
 def check_command_allowed(interaction: discord.Interaction):
-    command_name = interaction.command.name if interaction.command else ""
-    if command_name in COMMANDS_NO_APP_REQUIRED:
+    if not interaction.command:
+        return True, None
+    command_name = interaction.command.name
+    if command_name in COMMANDS_NO_APP_NEEDED:
         return True, None
     
     app = get_current_app(interaction)
     if not app:
-        return False, "No app linked to this channel. Please link a channel in the dashboard first or use /select_app to choose an app."
+        return False, "Please use `/select_app <app_id>` to choose an app first, or link a channel in the dashboard!"
     
-    # Check if current channel is the linked channel for the app
-    if app.get("discord_channel_id") and str(interaction.channel_id) != app["discord_channel_id"]:
-        return False, f"This bot only works in <#{app['discord_channel_id']}> for the app **{app['app_name']}**."
+    # Check channel restriction only if the app has a linked channel
+    if app.get("discord_channel_id"):
+        if str(interaction.channel_id) != app["discord_channel_id"]:
+            return False, f"This bot only works in <#{app['discord_channel_id']}> for the app **{app['app_name']}**!"
     
     return True, None
 
@@ -145,8 +162,8 @@ async def info(interaction: discord.Interaction):
 async def link_token(interaction: discord.Interaction, api_token: str):
     # Test if token is valid
     test_url = f"{API_BASE}/apps"
-    test_resp = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
-    if test_resp.status_code != 200:
+    test_res = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
+    if test_res.status_code != 200:
         await interaction.response.send_message("❌ Invalid token! Please check and try again.", ephemeral=True)
         return
     
@@ -162,20 +179,21 @@ async def unlink_token(interaction: discord.Interaction):
     if user_id_str in user_tokens:
         del user_tokens[user_id_str]
         save_user_tokens(user_tokens)
-    if interaction.user.id in user_selected_app:
-        del user_selected_app[interaction.user.id]
+    if user_id_str in user_selected_app:
+        del user_selected_app[user_id_str]
+        save_user_selected_apps(user_selected_app)
     await interaction.response.send_message("✅ Token unlinked successfully.", ephemeral=True)
 
 @tree.command(name="list_apps", description="List your LegitAuth applications")
 async def list_apps(interaction: discord.Interaction):
     url = f"{API_BASE}/apps"
-    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code != 200:
-        await interaction.response.send_message("❌ Failed to fetch apps. Did you link your token with /link_token?", ephemeral=True)
+    res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code != 200:
+        await interaction.response.send_message("❌ Could not load apps! Did you link your token with `/link_token`?", ephemeral=True)
         return
-    apps = resp.json()
+    apps = res.json()
     if not apps:
-        await interaction.response.send_message("No applications found.", ephemeral=True)
+        await interaction.response.send_message("You have no applications yet! Create one in the LegitAuth dashboard first.", ephemeral=True)
         return
     embed = discord.Embed(title="Your Applications", color=0x5865F2)
     for app in apps:
@@ -189,20 +207,22 @@ async def list_apps(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="select_app", description="Select an application to manage")
-@app_commands.describe(app_id="Application ID from /list_apps")
+@app_commands.describe(app_id="Application ID from `/list_apps`")
 async def select_app(interaction: discord.Interaction, app_id: int):
-    url = f"{API_BASE}/apps"
-    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code != 200:
-        await interaction.response.send_message("❌ Unable to verify app. Did you link your token with /link_token?", ephemeral=True)
+    url = f"{API_URL}/apps"
+    res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code != 200:
+        await interaction.response.send_message("❌ Could not verify app! Did you link your token with `/link_token`?", ephemeral=True)
         return
-    apps = resp.json()
+    apps = res.json()
     selected = next((a for a in apps if a["id"] == app_id), None)
     if not selected:
-        await interaction.response.send_message("App ID not found under your account.", ephemeral=True)
+        await interaction.response.send_message("App ID not found under your account! Use `/list_apps` to see available apps.", ephemeral=True)
         return
-    user_selected_app[interaction.user.id] = selected
-    await interaction.response.send_message(f"✅ Selected app **{selected['app_name']}** (ID: {app_id}).", ephemeral=True)
+    user_id_str = str(interaction.user.id)
+    user_selected_app[user_id_str] = selected
+    save_user_selected_apps(user_selected_app)
+    await interaction.response.send_message(f"✅ Selected app **{selected['app_name']}**! You can now use all management commands.", ephemeral=True)
 
 @tree.command(name="create_user", description="Create a new user for the selected app")
 @app_commands.describe(
@@ -229,11 +249,11 @@ async def create_user(interaction: discord.Interaction, username: str, password:
         payload["expires_at"] = expires_at
     
     url = f"{API_BASE}/apps/{app_id}/users"
-    resp = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message(f"✅ User **{username}** created successfully for application **{app['app_name']}**.", ephemeral=True)
+    res = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message(f"✅ User **{username}** created successfully for **{app['app_name']}**!", ephemeral=True)
     else:
-        error_detail = resp.json().get('detail', 'Unknown error') if resp.content else 'Unknown error'
+        error_detail = res.json().get('detail', 'Unknown error') if res.content else 'Unknown error'
         await interaction.response.send_message(f"❌ Failed to create user: {error_detail}", ephemeral=True)
 
 @tree.command(name="list_users", description="List all users for the selected app")
@@ -247,22 +267,22 @@ async def list_users(interaction: discord.Interaction):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/users"
-    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code != 200:
+    res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch users.", ephemeral=True)
         return
-    users = resp.json()
+    users = res.json()
     if not users:
-        await interaction.response.send_message("No users found for this app.", ephemeral=True)
+        await interaction.response.send_message("No users found for this app yet!", ephemeral=True)
         return
     
     embed = discord.Embed(title=f"Users for {app['app_name']}", color=0x38bdf8)
-    for user in users[:25]:  # Limit to first 25 to avoid embed size issues
-        status_text = "🔴 Banned" if user.get("status") == "banned" else "🟢 Active"
-        hwid_text = user.get("hwid", "Not set") if user.get("hwid") else "Not set"
+    for u in users[:25]:  # Limit to first 25 to avoid embed size issues
+        status_badge = "🔴 BANNED" if u.get("status") == "banned" else "🟢 ACTIVE"
+        hwid_text = u.get("hwid", "Not Set") if u.get("hwid") else "Not Set"
         embed.add_field(
-            name=f"{user['username']} (ID: {user['id']})",
-            value=f"Status: {status_text}\nHWID: {hwid_text[:20]}{'...' if len(hwid_text) > 20 else ''}\nExpires: {user.get('expires_at', 'Lifetime')}",
+            name=f"{u['username']} (ID: {u['id']})",
+            value=f"Status: {status_badge}\nHWID: {hwid_text[:20]}{'...' if len(hwid_text) > 20 else ''}\nExpires: {u.get('expires_at', 'Lifetime')}",
             inline=False
         )
     if len(users) > 25:
@@ -270,7 +290,7 @@ async def list_users(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="delete_user", description="Delete a user from the selected app")
-@app_commands.describe(user_id="User ID from /list_users")
+@app_commands.describe(user_id="User ID from `/list_users`")
 async def delete_user(interaction: discord.Interaction, user_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -281,14 +301,14 @@ async def delete_user(interaction: discord.Interaction, user_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/users/{user_id}"
-    resp = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ User deleted successfully.", ephemeral=True)
+    res = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ User deleted successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to delete user.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to delete user!", ephemeral=True)
 
 @tree.command(name="reset_user_hwid", description="Reset HWID for a user")
-@app_commands.describe(user_id="User ID from /list_users")
+@app_commands.describe(user_id="User ID from `/list_users`")
 async def reset_user_hwid(interaction: discord.Interaction, user_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -299,14 +319,14 @@ async def reset_user_hwid(interaction: discord.Interaction, user_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/users/{user_id}/reset-hwid"
-    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ User HWID reset successfully.", ephemeral=True)
+    res = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ User HWID reset successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to reset HWID.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to reset HWID!", ephemeral=True)
 
 @tree.command(name="toggle_user_ban", description="Ban or unban a user")
-@app_commands.describe(user_id="User ID from /list_users")
+@app_commands.describe(user_id="User ID from `/list_users`")
 async def toggle_user_ban(interaction: discord.Interaction, user_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -317,11 +337,11 @@ async def toggle_user_ban(interaction: discord.Interaction, user_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/users/{user_id}/toggle-ban"
-    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ User ban status toggled successfully.", ephemeral=True)
+    res = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ User ban status toggled successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to toggle ban status.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to toggle ban status!", ephemeral=True)
 
 @tree.command(name="create_license", description="Generate licenses for the selected app")
 @app_commands.describe(
@@ -348,14 +368,14 @@ async def create_license(interaction: discord.Interaction, amount: int, duration
         payload["expires_at"] = expires_at
     
     url = f"{API_BASE}/apps/{app_id}/licenses"
-    resp = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        data = resp.json()
+    res = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        data = res.json()
         keys = data.get("keys", [])
         keys_text = "\n".join(keys)
         await interaction.response.send_message(f"✅ Generated {amount} license(s) for **{app['app_name']}**:\n```\n{keys_text}\n```", ephemeral=True)
     else:
-        error_detail = resp.json().get('detail', 'Unknown error') if resp.content else 'Unknown error'
+        error_detail = res.json().get('detail', 'Unknown error') if res.content else 'Unknown error'
         await interaction.response.send_message(f"❌ Failed to generate licenses: {error_detail}", ephemeral=True)
 
 @tree.command(name="list_licenses", description="List all licenses for the selected app")
@@ -369,22 +389,22 @@ async def list_licenses(interaction: discord.Interaction):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/licenses"
-    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code != 200:
+    res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch licenses.", ephemeral=True)
         return
-    licenses = resp.json()
+    licenses = res.json()
     if not licenses:
-        await interaction.response.send_message("No licenses found for this app.", ephemeral=True)
+        await interaction.response.send_message("No licenses found for this app yet!", ephemeral=True)
         return
     
     embed = discord.Embed(title=f"Licenses for {app['app_name']}", color=0xf59e0b)
-    for lic in licenses[:25]:  # Limit to first 25 to avoid embed size issues
-        status_text = "🔴 Banned" if lic.get("status") == "banned" else "🟢 Active"
-        hwid_text = lic.get("hwid", "Not set") if lic.get("hwid") else "Not set"
+    for l in licenses[:25]:  # Limit to first 25 to avoid embed size issues
+        status_badge = "🔴 BANNED" if l.get("status") == "banned" else "🟢 ACTIVE"
+        hwid_text = l.get("hwid", "Not Set") if l.get("hwid") else "Not Set"
         embed.add_field(
-            name=f"{lic['license_key']} (ID: {lic['id']})",
-            value=f"Status: {status_text}\nHWID: {hwid_text[:20]}{'...' if len(hwid_text) > 20 else ''}\nExpires: {lic.get('expires_at', 'Lifetime')}",
+            name=f"{l['license_key']} (ID: {l['id']})",
+            value=f"Status: {status_badge}\nHWID: {hwid_text[:20]}{'...' if len(hwid_text) > 20 else ''}\nExpires: {l.get('expires_at', 'Lifetime')}",
             inline=False
         )
     if len(licenses) > 25:
@@ -392,7 +412,7 @@ async def list_licenses(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="delete_license", description="Delete a license from the selected app")
-@app_commands.describe(license_id="License ID from /list_licenses")
+@app_commands.describe(license_id="License ID from `/list_licenses`")
 async def delete_license(interaction: discord.Interaction, license_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -403,14 +423,14 @@ async def delete_license(interaction: discord.Interaction, license_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/licenses/{license_id}"
-    resp = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ License deleted successfully.", ephemeral=True)
+    res = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ License deleted successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to delete license.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to delete license!", ephemeral=True)
 
 @tree.command(name="reset_license_hwid", description="Reset HWID for a license")
-@app_commands.describe(license_id="License ID from /list_licenses")
+@app_commands.describe(license_id="License ID from `/list_licenses`")
 async def reset_license_hwid(interaction: discord.Interaction, license_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -421,14 +441,14 @@ async def reset_license_hwid(interaction: discord.Interaction, license_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/licenses/{license_id}/reset-hwid"
-    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ License HWID reset successfully.", ephemeral=True)
+    res = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ License HWID reset successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to reset HWID.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to reset HWID!", ephemeral=True)
 
 @tree.command(name="toggle_license_ban", description="Ban or unban a license")
-@app_commands.describe(license_id="License ID from /list_licenses")
+@app_commands.describe(license_id="License ID from `/list_licenses`")
 async def toggle_license_ban(interaction: discord.Interaction, license_id: int):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -439,13 +459,13 @@ async def toggle_license_ban(interaction: discord.Interaction, license_id: int):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/licenses/{license_id}/toggle-ban"
-    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("✅ License ban status toggled successfully.", ephemeral=True)
+    res = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code == 200:
+        await interaction.response.send_message("✅ License ban status toggled successfully!", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Failed to toggle ban status.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to toggle ban status!", ephemeral=True)
 
-@tree.command(name="list_logs", description="List recent activity logs for the selected app")
+@tree.command(name="list_logs", description="Show recent activity logs for the selected app")
 async def list_logs(interaction: discord.Interaction):
     allowed, error_msg = check_command_allowed(interaction)
     if not allowed:
@@ -456,13 +476,13 @@ async def list_logs(interaction: discord.Interaction):
     app_id = app["id"]
     
     url = f"{API_BASE}/apps/{app_id}/logs"
-    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code != 200:
+    res = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if res.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch logs.", ephemeral=True)
         return
-    logs = resp.json()
+    logs = res.json()
     if not logs:
-        await interaction.response.send_message("No logs found for this app.", ephemeral=True)
+        await interaction.response.send_message("No logs found for this app yet!", ephemeral=True)
         return
     
     embed = discord.Embed(title=f"Recent Logs for {app['app_name']}", color=0xef4444)
