@@ -644,8 +644,8 @@ function updateQuickSetup() {
                 btnStep2.style.opacity = 1;
                 btnStep2.style.pointerEvents = 'auto';
                 
-                // Hardcoded safe invite URL (100% reliable!)
-                btnStep2.href = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flegitaauth.onrender.com%2Fapi%2Fcreator%2Fdiscord%2Fcallback&integration_type=0&scope=bot+applications.commands";
+                // Simple bot invite URL without conflicting OAuth parameters
+                btnStep2.href = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
                 
                 // Mark step 3 as pending
                 step3Status.innerText = 'Pending';
@@ -729,7 +729,7 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-invite-link').href = 'https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flegitaauth.onrender.com%2Fapi%2Fcreator%2Fdiscord%2Fcallback&integration_type=0&scope=bot+applications.commands';
+        document.getElementById('discord-invite-link').href = 'https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
         return;
     }
     
@@ -737,8 +737,8 @@ async function onDiscordGuildSelect(guildId) {
     const guild = currentDiscordGuilds.find(g => g.id == guildId);
     if (guild) resolvedGuildName = guild.name;
     
-    // Update invite link (hardcoded for 100% safety)
-    const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flegitaauth.onrender.com%2Fapi%2Fcreator%2Fdiscord%2Fcallback&integration_type=0&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
+    // Update invite link (simple bot invite without OAuth conflicts)
+    const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
     document.getElementById('discord-invite-link').href = inviteUrl;
     
     // Also update quick setup button's link!
