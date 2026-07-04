@@ -100,11 +100,9 @@ async function loadApps() {
         
         const list = document.getElementById('app-list');
         const selector = document.getElementById('app-selector');
-        const discordSelector = document.getElementById('discord-app-selector');
         
         list.innerHTML = '';
         if (selector) selector.innerHTML = '<option value="">-- Select an App --</option>';
-        if (discordSelector) discordSelector.innerHTML = '<option value="">-- Select an App to Integrate --</option>';
         
         // Update Dashboard Stats
         document.getElementById('stat-apps').innerText = apps.length;
@@ -149,15 +147,10 @@ async function loadApps() {
                 opt.text = app.app_name;
                 selector.appendChild(opt);
             }
-
-            // Discord Dropdown Option
-            if (discordSelector) {
-                const opt = document.createElement('option');
-                opt.value = app.id;
-                opt.text = app.app_name;
-                discordSelector.appendChild(opt);
-            }
         });
+        
+        // Update Discord status card
+        updateDiscordStatusCard();
         
     } catch (e) {
         logout();
@@ -741,23 +734,16 @@ async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
     }
 }
 
-async function switchDiscordApp(appId) {
-    if (!appId) {
-        document.getElementById('discord-integration-details').style.display = 'none';
-        return;
-    }
-    
-    document.getElementById('discord-integration-details').style.display = 'block';
-    
-    const app = currentApps.find(a => a.id == appId);
-    if (!app) return;
-    
+async function updateDiscordStatusCard() {
     const statusText = document.getElementById('discord-status-text');
     const statusBadge = document.getElementById('discord-status-badge');
     const unlinkBtn = document.getElementById('discord-unlink-btn');
     
-    if (app.discord_guild_id && app.discord_channel_id) {
-        statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
+    const anyLinked = currentApps.some(app => app.discord_guild_id && app.discord_channel_id);
+    const linkedApp = currentApps.find(app => app.discord_guild_id && app.discord_channel_id);
+    
+    if (anyLinked && linkedApp) {
+        statusText.innerText = `All apps linked to server "${linkedApp.discord_guild_name}" in channel #${linkedApp.discord_channel_name}`;
         statusBadge.innerText = 'Active';
         statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
         statusBadge.style.color = '#10b981';
@@ -765,8 +751,8 @@ async function switchDiscordApp(appId) {
         unlinkBtn.style.display = 'inline-block';
         
         // Populate the guild selector
-        resolvedGuildId = app.discord_guild_id;
-        resolvedGuildName = app.discord_guild_name;
+        resolvedGuildId = linkedApp.discord_guild_id;
+        resolvedGuildName = linkedApp.discord_guild_name;
         const guildSelector = document.getElementById('discord-guild-selector');
         const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
         if (!existingOption) {
@@ -780,7 +766,24 @@ async function switchDiscordApp(appId) {
         await setBotInviteLink('discord-invite-link', resolvedGuildId);
         
         // Load channels
-        await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
+        await loadDiscordGuildChannels(resolvedGuildId, linkedApp.discord_channel_id);
+        
+        // Populate Discord config fields
+        if (document.getElementById('discord-config-notifications')) {
+            document.getElementById('discord-config-notifications').checked = linkedApp.discord_notifications ?? true;
+        }
+        if (document.getElementById('discord-config-slash-commands')) {
+            document.getElementById('discord-config-slash-commands').checked = linkedApp.discord_slash_commands ?? true;
+        }
+        if (document.getElementById('discord-config-prefix')) {
+            document.getElementById('discord-config-prefix').value = linkedApp.discord_command_prefix ?? '!';
+        }
+        if (document.getElementById('discord-config-welcome')) {
+            document.getElementById('discord-config-welcome').value = linkedApp.discord_welcome_message ?? 'Welcome! Use /help to see commands!';
+        }
+        if (document.getElementById('discord-config-allow-private')) {
+            document.getElementById('discord-config-allow-private').checked = linkedApp.discord_allow_private ?? false;
+        }
     } else {
         statusText.innerText = 'Not Configured';
         statusBadge.innerText = 'Inactive';
@@ -835,7 +838,6 @@ async function loadDiscordChannels(guildId, selectedChannelId = null) {
 }
 
 async function saveDiscordConfig() {
-    const appId = document.getElementById('discord-app-selector').value;
     const channelId = document.getElementById('discord-channel-selector').value;
     const channelSelector = document.getElementById('discord-channel-selector');
     const channelName = channelSelector.options[channelSelector.selectedIndex]?.text.replace('#', '') || '';
@@ -844,7 +846,7 @@ async function saveDiscordConfig() {
     
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_URL}/apps/${appId}/discord`, {
+        const res = await fetch(`${API_URL}/discord/integrate-all`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -854,15 +856,17 @@ async function saveDiscordConfig() {
                 discord_guild_id: resolvedGuildId,
                 discord_channel_id: channelId,
                 discord_guild_name: resolvedGuildName,
-                discord_channel_name: channelName
+                discord_channel_name: channelName,
+                discord_notifications: document.getElementById('discord-config-notifications')?.checked ?? true,
+                discord_slash_commands: document.getElementById('discord-config-slash-commands')?.checked ?? true,
+                discord_command_prefix: document.getElementById('discord-config-prefix')?.value ?? '!',
+                discord_welcome_message: document.getElementById('discord-config-welcome')?.value ?? 'Welcome! Use /help to see commands!',
+                discord_allow_private: document.getElementById('discord-config-allow-private')?.checked ?? false
             })
         });
         if (res.ok) {
-            showToast('Discord configuration saved successfully!', 'success');
+            showToast('Discord configuration saved and all apps integrated successfully!', 'success');
             await loadApps();
-            // Re-select to update the status card view
-            document.getElementById('discord-app-selector').value = appId;
-            await switchDiscordApp(appId);
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to save configuration', 'error');
@@ -873,30 +877,20 @@ async function saveDiscordConfig() {
 }
 
 async function unlinkDiscordConfig() {
-    if (!confirm('Are you sure you want to unlink Discord from this application?')) return;
+    if (!confirm('Are you sure you want to unlink Discord from all applications?')) return;
     
-    const appId = document.getElementById('discord-app-selector').value;
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`${API_URL}/apps/${appId}/discord`, {
-            method: 'PUT',
+        const res = await fetch(`${API_URL}/discord/unlink-all`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                discord_guild_id: null,
-                discord_channel_id: null,
-                discord_guild_name: null,
-                discord_channel_name: null
-            })
+            }
         });
         if (res.ok) {
-            showToast('Discord integration removed.', 'info');
+            showToast('Discord integration removed from all apps.', 'info');
             await loadApps();
-            // Re-select to update UI
-            document.getElementById('discord-app-selector').value = appId;
-            await switchDiscordApp(appId);
         } else {
             const data = await res.json();
             showToast(data.detail || 'Failed to unlink', 'error');
