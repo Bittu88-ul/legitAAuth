@@ -160,18 +160,36 @@ async def info(interaction: discord.Interaction):
 @tree.command(name="link_token", description="Link your LegitAuth API token to use the bot")
 @app_commands.describe(api_token="Your API token from LegitAuth Dashboard's Discord tab")
 async def link_token(interaction: discord.Interaction, api_token: str):
-    # Test if token is valid
-    test_url = f"{API_BASE}/apps"
-    test_res = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
-    if test_res.status_code != 200:
-        await interaction.response.send_message("❌ Invalid token! Please check and try again.", ephemeral=True)
-        return
-    
-    # Save token
+    # Save token first, then test it
     user_id_str = str(interaction.user.id)
     user_tokens[user_id_str] = api_token
     save_user_tokens(user_tokens)
-    await interaction.response.send_message("✅ Token linked successfully! You can now use the bot commands.", ephemeral=True)
+    
+    # Now test the token
+    test_url = f"{API_BASE}/apps"
+    test_res = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
+    
+    if test_res.status_code == 200:
+        await interaction.response.send_message("✅ Token linked successfully! You can now use the bot commands!", ephemeral=True)
+    else:
+        # Try to get error details
+        error_msg = "Unknown error"
+        try:
+            error_data = test_res.json()
+            if isinstance(error_data, dict):
+                error_msg = error_data.get("detail", str(error_data))
+        except:
+            pass
+        
+        await interaction.response.send_message(
+            f"⚠️ Token saved, but validation failed (Status: {test_res.status_code}).\n"
+            f"Error: {error_msg}\n\n"
+            f"Please make sure:\n"
+            f"1. You're logged into the LegitAuth dashboard\n"
+            f"2. You copied the FULL token from the Discord tab (it should be a long string of characters)\n"
+            f"3. The server is running at {API_BASE}",
+            ephemeral=True
+        )
 
 @tree.command(name="unlink_token", description="Unlink your LegitAuth API token from the bot")
 async def unlink_token(interaction: discord.Interaction):
