@@ -143,7 +143,7 @@ def get_current_creator(authorization: Optional[str] = Header(None), db: Session
 # --- Creator API Endpoints ---
 
 from google.oauth2 import id_token
-from google.auth.transport import requests
+from google.auth.transport import requests as google_requests
 
 class GoogleLoginRequest(BaseModel):
     token: str
@@ -155,7 +155,7 @@ def google_login(req: GoogleLoginRequest, db: Session = Depends(get_db)):
         CLIENT_ID = "588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
         idinfo = id_token.verify_oauth2_token(
             req.token, 
-            requests.Request(), 
+            google_requests.Request(), 
             CLIENT_ID,
             clock_skew_in_seconds=315360000 # 10 years tolerance
         )
