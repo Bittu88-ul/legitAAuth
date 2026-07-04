@@ -132,7 +132,7 @@ async function loadApps() {
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0;"><i class="fas fa-cube" style="color:var(--primary); margin-right:8px;"></i>${app.app_name}</h3>
-                    <button onclick="deleteApp(event, ${app.id})" style="width:auto; padding:8px 15px; background:rgba(239, 68, 68, 0.2); color:#ef4444; border:1px solid #ef4444; box-shadow:none;"><i class="fas fa-trash"></i></button>
+                    <button onclick="deleteApp(event, ${app.id})" style="width:auto; padding:8px 15px; background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; box-shadow:none;"><i class="fas fa-trash"></i></button>
                 </div>
                 <div style="margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
                     <p style="margin:5px 0;"><strong>Owner ID:</strong> <span style="color:white;">${app.owner_id}</span></p>
@@ -276,7 +276,7 @@ async function loadUsers() {
             html += `<tr>
                 <td>${u.username} <button onclick="copyToClipboard('${u.username}')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0;width:auto;margin:0 5px;box-shadow:none;"><i class="fas fa-copy"></i></button></td>
                 <td><span style="color:var(--primary); font-family:monospace;">${u.last_ip || 'Never'}</span></td>
-                <td><span style="font-family:monospace; color:var(--text-muted);">${u.hwid ? u.hwid.substring(0,8)+'...' : 'Not Set'}</span></td>
+                <td><span style="font-family:monospace; color:var(--text-muted);">${u.hwid ? u.hwid.substring(0,8) + '...' : 'Not Set'}</span></td>
                 <td>${statusBadge} ${u.hwid_lock ? '<span style="color:var(--success);"><i class="fas fa-lock"></i></span>' : '<span style="color:var(--danger);"><i class="fas fa-lock-open"></i></span>'}</td>
                 <td>${u.expires_at}</td>
                 <td>
@@ -587,14 +587,14 @@ function updateGrowthChart(usersCount, licensesCount) {
                 label: 'Users',
                 data: [0, 0, usersCount || 0],
                 borderColor: '#8b5cf6',
-                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                backgroundColor: 'rgba(139,92,246,0.2)',
                 tension: 0.4,
                 fill: true
             }, {
                 label: 'Licenses',
                 data: [0, 0, licensesCount || 0],
                 borderColor: '#38bdf8',
-                backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                backgroundColor: 'rgba(56,189,248,0.2)',
                 tension: 0.4,
                 fill: true
             }]
@@ -630,7 +630,7 @@ function updateQuickSetup() {
             if (res.ok) {
                 // Step 1 complete!
                 step1Status.innerText = 'Complete';
-                step1Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                step1Status.style.background = 'rgba(16,185,129,0.2)';
                 step1Status.style.color = '#10b981';
                 step1Status.style.borderColor = '#10b981';
                 btnStep1.disabled = true;
@@ -638,35 +638,31 @@ function updateQuickSetup() {
                 
                 // Now step 2 unlocked!
                 step2Status.innerText = 'Pending';
-                step2Status.style.background = 'rgba(239, 68, 68, 0.2)';
+                step2Status.style.background = 'rgba(239,68,68,0.2)';
                 step2Status.style.color = '#ef4444';
                 step2Status.style.borderColor = '#ef4444';
                 btnStep2.style.opacity = 1;
                 btnStep2.style.pointerEvents = 'auto';
                 
-                // Get invite URL
-                const inviteRes = await fetch(`${API_URL}/discord/invite-url`, {headers: {'Authorization': `Bearer ${token}`}});
-                if (inviteRes.ok) {
-                    const inviteData = await inviteRes.json();
-                    btnStep2.href = inviteData.invite_url;
-                }
+                // Hardcoded safe invite URL (100% reliable!)
+                btnStep2.href = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands";
                 
                 // Mark step 3 as pending
                 step3Status.innerText = 'Pending';
-                step3Status.style.background = 'rgba(239, 68, 68, 0.2)';
+                step3Status.style.background = 'rgba(239,68,68,0.2)';
                 step3Status.style.color = '#ef4444';
                 step3Status.style.borderColor = '#ef4444';
                 
                 // Check if there are any apps with discord linked to mark step3 complete
                 if (currentApps.some(app => app.discord_guild_id && app.discord_channel_id)) {
                     step3Status.innerText = 'Complete!';
-                    step3Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                    step3Status.style.background = 'rgba(16,185,129,0.2)';
                     step3Status.style.color = '#10b981';
                     step3Status.style.borderColor = '#10b981';
                     btnStep3.style.opacity = 1;
                     btnStep3.style.pointerEvents = 'auto';
                     step2Status.innerText = 'Complete';
-                    step2Status.style.background = 'rgba(16, 185, 129, 0.2)';
+                    step2Status.style.background = 'rgba(16,185,129,0.2)';
                     step2Status.style.color = '#10b981';
                     step2Status.style.borderColor = '#10b981';
                 }
@@ -733,7 +729,7 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-invite-link').href = '#';
+        document.getElementById('discord-invite-link').href = 'https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands';
         return;
     }
     
@@ -741,15 +737,15 @@ async function onDiscordGuildSelect(guildId) {
     const guild = currentDiscordGuilds.find(g => g.id == guildId);
     if (guild) resolvedGuildName = guild.name;
     
-    // Update invite link
-    const token = localStorage.getItem('token');
-    try {
-        const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${guildId}`, {headers: {'Authorization': `Bearer ${token}`}});
-        if (resInvite.ok) {
-            const data = await resInvite.json();
-            document.getElementById('discord-invite-link').href = data.invite_url;
-        }
-    } catch(e) {}
+    // Update invite link (hardcoded for 100% safety)
+    const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands&guild_id=${guildId}&disable_guild_select=true`;
+    document.getElementById('discord-invite-link').href = inviteUrl;
+    
+    // Also update quick setup button's link!
+    const quickSetupBtn2 = document.getElementById('btn-step2');
+    if (quickSetupBtn2) {
+        quickSetupBtn2.href = inviteUrl;
+    }
     
     // Load channels
     await loadDiscordGuildChannels(guildId);
@@ -804,7 +800,7 @@ async function switchDiscordApp(appId) {
     if (app.discord_guild_id && app.discord_channel_id) {
         statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
         statusBadge.innerText = 'Active';
-        statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+        statusBadge.style.background = 'rgba(16,185,129,0.2)';
         statusBadge.style.color = '#10b981';
         statusBadge.style.borderColor = '#10b981';
         unlinkBtn.style.display = 'inline-block';
@@ -822,69 +818,15 @@ async function switchDiscordApp(appId) {
         }
         guildSelector.value = resolvedGuildId;
         
-        // Set invite url
-        const token = localStorage.getItem('token');
-        try {
-            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
-            if (resInvite.ok) {
-                const data = await resInvite.json();
-                document.getElementById('discord-invite-link').href = data.invite_url;
-            }
-        } catch(e) {}
-        
         // Load channels
         await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
     } else {
         statusText.innerText = 'Not Configured';
         statusBadge.innerText = 'Inactive';
-        statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+        statusBadge.style.background = 'rgba(239,68,68,0.2)';
         statusBadge.style.color = '#ef4444';
         statusBadge.style.borderColor = '#ef4444';
         unlinkBtn.style.display = 'none';
-    }
-}
-
-async function resolveDiscordInvite() {
-    const invite = document.getElementById('discord-invite-input').value.trim();
-    if (!invite) return showToast('Please enter an invite link or code', 'error');
-    
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/resolve-invite?invite=${encodeURIComponent(invite)}`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        const data = await res.json();
-        if (res.ok) {
-            resolvedGuildId = data.guild_id;
-            resolvedGuildName = data.guild_name;
-            
-            // Load into selector
-            const guildSelector = document.getElementById('discord-guild-selector');
-            const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
-            if (!existingOption) {
-                const opt = document.createElement('option');
-                opt.value = resolvedGuildId;
-                opt.text = resolvedGuildName;
-                guildSelector.appendChild(opt);
-            }
-            guildSelector.value = resolvedGuildId;
-            
-            // Set invite URL
-            const resInvite = await fetch(`${API_URL}/discord/invite-url?guild_id=${resolvedGuildId}`, {headers: {'Authorization': `Bearer ${token}`}});
-            if (resInvite.ok) {
-                const inviteData = await resInvite.json();
-                document.getElementById('discord-invite-link').href = inviteData.invite_url;
-            }
-            
-            showToast('Discord server found!', 'success');
-            
-            // Fetch channels
-            await loadDiscordGuildChannels(resolvedGuildId);
-        } else {
-            showToast(data.detail || 'Could not resolve invite link', 'error');
-        }
-    } catch(e) {
-        showToast('Error resolving invite', 'error');
     }
 }
 
