@@ -573,10 +573,8 @@
 
     @app.get("/api/creator/discord/invite-url")
     def get_bot_invite_url(guild_id: Optional[str] = None):
-        if not DISCORD_CLIENT_ID:
-            raise HTTPException(status_code=500, detail="Discord client ID not set")
-        # Simple, safe invite URL (no urlencode issues!)
-        base = f"https://discord.com/api/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&permissions={DISCORD_BOT_PERMISSIONS}&scope=bot+applications.commands"
+        # Use user's exact OAuth2 URL
+        base = "https://discord.com/api/oauth2/authorize?client_id=1522600480662880347&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flegitaauth.onrender.com%2Fapi%2Fcreator%2Fdiscord%2Fcallback&integration_type=0&scope=bot+applications.commands"
         if guild_id:
             base += f"&guild_id={guild_id}&disable_guild_select=true"
         return {"invite_url": base}
