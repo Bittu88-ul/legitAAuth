@@ -424,6 +424,21 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", os.getenv("LEGITAUTH_API_URL", "http://localhost:8000") + "/api/creator/discord/callback")
 DISCORD_BOT_PERMISSIONS = "8"  # Administrator permissions
+FRONTEND_URL = os.getenv("LEGITAUTH_API_URL", "http://localhost:8000")
+
+def build_bot_invite_url(guild_id: Optional[str] = None) -> str:
+    client_id = DISCORD_CLIENT_ID or "1522600480662880347"
+    params = {
+        "client_id": client_id,
+        "permissions": DISCORD_BOT_PERMISSIONS,
+        "scope": "bot applications.commands",
+        "response_type": "code",
+        "redirect_uri": DISCORD_REDIRECT_URI,
+    }
+    if guild_id:
+        params["guild_id"] = guild_id
+        params["disable_guild_select"] = "true"
+    return f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
 
 def refresh_discord_token(creator: Creator, db: Session):
     # Check if token needs refresh
@@ -460,21 +475,22 @@ def discord_login(current_creator: Creator = Depends(get_current_creator)):
     # Get user's token so we can pass it in state
     user_token = create_access_token(data={"email": current_creator.email, "id": current_creator.id})
     scopes = "identify guilds"
-    url = (
-        f"https://discord.com/api/oauth2/authorize?response_type=code"
-        f"&client_id={DISCORD_CLIENT_ID}"
-        f"&redirect_uri={DISCORD_REDIRECT_URI}"
-        f"&scope={scopes}"
-        f"&state={user_token}"
-    )
+    params = {
+        "response_type": "code",
+        "client_id": DISCORD_CLIENT_ID,
+        "redirect_uri": DISCORD_REDIRECT_URI,
+        "scope": scopes,
+        "state": user_token,
+    }
+    url = f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
     return {"auth_url": url}
 
 @app.get("/api/creator/discord/callback")
 def discord_callback(code: Optional[str] = None, state: Optional[str] = None, guild_id: Optional[str] = None, permissions: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        # If this is a bot invite callback (no state), just redirect to dashboard!
+        # Bot invite callback (no state) — bot was added to the server
         if not state:
-            return RedirectResponse(url="/#discord")
+            return RedirectResponse(url=f"{FRONTEND_URL}/#discord")
         
         if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
             raise HTTPException(status_code=500, detail="Discord OAuth not configured")
@@ -523,11 +539,10 @@ def discord_callback(code: Optional[str] = None, state: Optional[str] = None, gu
         db.commit()
         
         # Redirect back to dashboard
-        return RedirectResponse(url="/#discord")
+        return RedirectResponse(url=f"{FRONTEND_URL}/#discord")
     except Exception as e:
         print(f"Discord callback error: {e}")
-        # Even if there's an error, still try to redirect to dashboard
-        return RedirectResponse(url="/#discord")
+        return RedirectResponse(url=f"{FRONTEND_URL}/#discord")
 
 @app.get("/api/creator/discord/me")
 def get_discord_me(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -573,11 +588,10 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
 
 @app.get("/api/creator/discord/invite-url")
 def get_bot_invite_url(guild_id: Optional[str] = None):
-    # Super clean bot invite URL - no extra parameters that cause conflicts!
-    base = "https://discord.com/oauth2/authorize?client_id=1522600480662880347&permissions=8&scope=bot+applications.commands"
-    if guild_id:
-        base += f"&guild_id={guild_id}&disable_guild_select=true"
-    return {"invite_url": base}
+    return {
+        "invite_url": build_bot_invite_url(guild_id),
+        "redirect_uri": DISCORD_REDIRECT_URI,
+    }
 
 
 def send_discord_webhook(url: str, message: str):
