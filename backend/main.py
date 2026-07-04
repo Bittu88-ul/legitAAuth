@@ -416,7 +416,35 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
         "secret": app.secret,
         "status": app.status,
         "version": app.version,
-        "dev_message": app.dev_message
+        "dev_message": app.dev_message,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
+    }
+
+
+@app.get("/api/creator/discord/bot/app-by-channel/{channel_id}")
+def get_app_by_channel_for_bot(channel_id: str, db: Session = Depends(get_db), x_bot_secret: Optional[str] = Header(None)):
+    """Bot-only lookup: find app linked to a channel (no user auth required)."""
+    bot_secret = os.getenv("DISCORD_BOT_API_SECRET", DISCORD_BOT_TOKEN)
+    if not x_bot_secret or x_bot_secret != bot_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    app = db.query(Application).filter(Application.discord_channel_id == channel_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="No application linked to this channel")
+    return {
+        "id": app.id,
+        "app_name": app.app_name,
+        "owner_id": app.owner_id,
+        "secret": app.secret,
+        "status": app.status,
+        "version": app.version,
+        "dev_message": app.dev_message,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
     }
 
 # --- Discord OAuth2 Endpoints ---
@@ -426,7 +454,7 @@ DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", os.getenv("LEGITAUTH_AP
 DISCORD_BOT_PERMISSIONS = "8"  # Administrator permissions
 FRONTEND_URL = os.getenv("LEGITAUTH_API_URL", "http://localhost:8000")
 
-def build_bot_invite_url(guild_id: Optional[str] = None) -> str:
+def build_bot_invite_url(guild_id: Optional[str] = None, state: Optional[str] = None) -> str:
     client_id = DISCORD_CLIENT_ID or "1522600480662880347"
     params = {
         "client_id": client_id,
@@ -438,7 +466,56 @@ def build_bot_invite_url(guild_id: Optional[str] = None) -> str:
     if guild_id:
         params["guild_id"] = guild_id
         params["disable_guild_select"] = "true"
+    if state:
+        params["state"] = state
     return f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
+
+
+def bot_is_in_guild(guild_id: str) -> bool:
+    if not DISCORD_BOT_TOKEN:
+        return False
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}", headers=headers, timeout=5)
+    return res.status_code == 200
+
+
+def get_user_manageable_guilds(access_token: str) -> list:
+    res = requests.get(
+        "https://discord.com/api/v10/users/@me/guilds",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=5,
+    )
+    if res.status_code != 200:
+        return []
+    guilds = []
+    for guild in res.json():
+        permissions = int(guild.get("permissions", 0))
+        if (permissions & 0x20) or (permissions & 0x8):
+            guilds.append({"id": guild["id"], "name": guild["name"], "icon": guild.get("icon")})
+    return guilds
+
+
+def get_bot_guilds_for_creator(creator: Creator, db: Session) -> list:
+    if not creator.discord_id or not creator.discord_access_token:
+        return []
+    token = refresh_discord_token(creator, db)
+    user_guilds = get_user_manageable_guilds(token)
+    return [g for g in user_guilds if bot_is_in_guild(g["id"])]
+
+
+def get_discord_setup_status(creator: Creator, db: Session) -> dict:
+    step1 = bool(creator.discord_id and creator.discord_access_token)
+    bot_guilds = get_bot_guilds_for_creator(creator, db) if step1 else []
+    step2 = len(bot_guilds) > 0
+    apps = db.query(Application).filter(Application.creator_id == creator.id).all()
+    step3 = any(app.discord_guild_id and app.discord_channel_id for app in apps)
+    return {
+        "step1_linked": step1,
+        "step2_bot_added": step2,
+        "step3_configured": step3,
+        "bot_guild_count": len(bot_guilds),
+        "configured_apps": sum(1 for app in apps if app.discord_guild_id and app.discord_channel_id),
+    }
 
 def refresh_discord_token(creator: Creator, db: Session):
     # Check if token needs refresh
@@ -488,7 +565,16 @@ def discord_login(current_creator: Creator = Depends(get_current_creator)):
 @app.get("/api/creator/discord/callback")
 def discord_callback(code: Optional[str] = None, state: Optional[str] = None, guild_id: Optional[str] = None, permissions: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        # Bot invite callback (no state) — bot was added to the server
+        # Bot invite callback — bot was added to a server (guild_id present, may have state)
+        if guild_id and not code:
+            redirect = f"{FRONTEND_URL}/#discord?bot_added={guild_id}"
+            if state:
+                payload = verify_access_token(state)
+                if payload:
+                    creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
+                    if creator and not creator.discord_id:
+                        redirect = f"{FRONTEND_URL}/#discord?bot_added={guild_id}"
+            return RedirectResponse(url=redirect)
         if not state:
             return RedirectResponse(url=f"{FRONTEND_URL}/#discord")
         
@@ -559,20 +645,23 @@ def get_discord_me(current_creator: Creator = Depends(get_current_creator), db: 
 def get_discord_guilds(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     if not current_creator.discord_id or not current_creator.discord_access_token:
         raise HTTPException(status_code=404, detail="Discord not linked")
-    
-    token = refresh_discord_token(current_creator, db)
-    res = requests.get("https://discord.com/api/v10/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to get guilds")
-    
-    # Filter guilds where user has MANAGE_GUILD or ADMINISTRATOR
-    # Permissions bit: 0x20 is MANAGE_GUILD, 0x8 is ADMINISTRATOR
-    guilds = []
-    for guild in res.json():
-        permissions = int(guild["permissions"])
-        if (permissions & 0x20) or (permissions & 0x8):
-            guilds.append(guild)
+    return get_user_manageable_guilds(refresh_discord_token(current_creator, db))
+
+
+@app.get("/api/creator/discord/bot-guilds")
+def get_discord_bot_guilds(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    """Servers where the user is admin AND the LegitAuth bot has been added."""
+    if not current_creator.discord_id or not current_creator.discord_access_token:
+        raise HTTPException(status_code=404, detail="Discord not linked")
+    guilds = get_bot_guilds_for_creator(current_creator, db)
+    if not guilds and not DISCORD_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="DISCORD_BOT_TOKEN not configured on server")
     return guilds
+
+
+@app.get("/api/creator/discord/setup-status")
+def get_discord_setup_status_endpoint(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    return get_discord_setup_status(current_creator, db)
 
 @app.get("/api/creator/discord/guilds/{guild_id}/channels")
 def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -587,9 +676,17 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
     return channels
 
 @app.get("/api/creator/discord/invite-url")
-def get_bot_invite_url(guild_id: Optional[str] = None):
+def get_bot_invite_url(
+    guild_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
+    state = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+        if verify_access_token(token):
+            state = token
     return {
-        "invite_url": build_bot_invite_url(guild_id),
+        "invite_url": build_bot_invite_url(guild_id, state),
         "redirect_uri": DISCORD_REDIRECT_URI,
     }
 
