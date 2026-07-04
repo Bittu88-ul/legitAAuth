@@ -58,7 +58,10 @@
             <div id="apps-tab" class="tab-content">
                 <!-- Quick Setup Section (Carlbot Style) -->
                 <div style="background: rgba(0,0,0,0.4); padding: 30px; border-radius: 16px; border: 1px solid var(--glass-border); margin-bottom:30px;">
-                    <h2 style="color: white; margin-bottom: 8px; font-size:28px;"><i class="fas fa-rocket"></i> Quick Setup</h2>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <h2 style="color: white; margin:0; font-size:28px;"><i class="fas fa-rocket"></i> Quick Setup</h2>
+                        <button onclick="updateQuickSetup()" style="width:auto; padding:8px 16px; background:rgba(88,101,242,0.2); border:1px solid #5865F2; color:white; border-radius:8px; cursor:pointer;"><i class="fas fa-sync-alt"></i> Refresh</button>
+                    </div>
                     <p style="color: var(--text-muted); margin-bottom:25px; font-size:16px;">Get your bot up and running in under 30 seconds!</p>
                     
                     <div style="display:flex; gap:15px; flex-wrap:wrap;">
@@ -151,6 +154,12 @@
                             <input type="text" id="new-user-name" placeholder="Username" style="width:200px; margin:0;">
                             <input type="password" id="new-user-pass" placeholder="Password" style="width:200px; margin:0;">
                             <input type="datetime-local" id="new-user-expiry" style="width:200px; margin:0;">
+                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                                <button type="button" onclick="setExpiryPreset(7)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">7 Days</button>
+                                <button type="button" onclick="setExpiryPreset(30)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">30 Days</button>
+                                <button type="button" onclick="setExpiryPreset(90)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">90 Days</button>
+                                <button type="button" onclick="setExpiryPreset(365)" style="background:rgba(88,101,242,0.3); border:none; color:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; border:1px solid #5865F2;">1 Year</button>
+                            </div>
                             <label><input type="checkbox" id="new-user-hwid" checked> HWID Lock</label>
                             <button onclick="addUser()" style="width:auto; padding: 16px 32px;">Add User</button>
                         </div>
@@ -337,8 +346,17 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                                 <i class="fab fa-discord"></i> Invite Bot
                             </a>
                         </div>
+                        <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
+                            Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
+                            <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
+                        </p>
 
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Channel</label>
+                        <!-- Mandatory Channel Warning -->
+                        <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b; padding: 12px 15px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                            <p style="color: #fbbf24; margin: 0; font-size: 14px;"><i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i><strong>MANDATORY:</strong> Aapko ek channel select karna hi padega. Bina channel select kare bot kaam nahi karega!</p>
+                        </div>
+
+                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Channel <span style="color: #ef4444;">*</span></label>
                         <select id="discord-channel-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
                             <option value="">-- Choose Channel --</option>
                         </select>
