@@ -20,7 +20,7 @@ import smtplib
 from email.mime.text import MIMEText
 import requests
 
-from .database import init_db, get_db, Creator, Application, AppUser, AppLicense, AppLog, OTP
+from .database import init_db, get_db, Creator, Application, AppUser, AppLicense, AppLog, OTP, Reseller
 from .auth_utils import hash_password, verify_password, create_access_token, verify_access_token
 
 app = FastAPI(title="LegitAuth System", version="1.0.0")
@@ -39,20 +39,6 @@ import sys
 @app.on_event("startup")
 def startup_event():
     init_db()
-    
-    # Start the Discord Bot in the background
-    bot_token = os.getenv("DISCORD_BOT_TOKEN")
-    if bot_token and "YOUR_DISCORD_BOT_TOKEN_HERE" not in bot_token:
-        try:
-            bot_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", "bot.py")
-            print(f"Starting Discord Bot in the background: {bot_path}")
-            subprocess.Popen(
-                [sys.executable, bot_path],
-                cwd=os.path.dirname(bot_path),
-                env=os.environ.copy()
-            )
-        except Exception as e:
-            print(f"Failed to start Discord Bot: {e}")
 
 # --- Pydantic Schemas ---
 class EmailRequest(BaseModel):
@@ -109,6 +95,43 @@ class ClientRegisterRequest(BaseModel):
     hwid: str
 
 class ClientLoginRequest(BaseModel):
+    hwid_lock: Optional[bool] = True
+
+class UserPasswordUpdateRequest(BaseModel):
+    new_password: str
+
+class LicenseCreateRequest(BaseModel):
+    amount: int
+    duration_days: int
+    hwid_lock: Optional[bool] = True
+
+class DiscordConfigRequest(BaseModel):
+    discord_guild_id: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    discord_guild_name: Optional[str] = None
+    discord_channel_name: Optional[str] = None
+    discord_role_id: Optional[str] = None
+    discord_role_name: Optional[str] = None
+    discord_log_enabled: Optional[bool] = False
+    discord_welcome_enabled: Optional[bool] = False
+    discord_welcome_msg: Optional[str] = "Welcome to the Server!"
+    discord_role_on_register: Optional[str] = None
+    discord_dm_notifications: Optional[bool] = True
+    discord_member_reset_enabled: Optional[bool] = False
+    discord_login_log_enabled: Optional[bool] = False
+    discord_embed_color: Optional[str] = "#00FFAA"
+    discord_allowed_roles: Optional[str] = None
+    bot_enabled: Optional[bool] = True
+
+class ClientRegisterRequest(BaseModel):
+    owner_id: str
+    secret: str
+    app_name: str
+    username: str
+    password: str
+    hwid: str
+
+class ClientLoginRequest(BaseModel):
     owner_id: str
     secret: str
     app_name: str
@@ -116,26 +139,6 @@ class ClientLoginRequest(BaseModel):
     password: Optional[str] = None
     license_key: Optional[str] = None
     hwid: str
-
-class DiscordConfigRequest(BaseModel):
-    discord_guild_id: Optional[str] = None
-    discord_channel_id: Optional[str] = None
-    discord_guild_name: Optional[str] = None
-    discord_channel_name: Optional[str] = None
-    discord_log_enabled: Optional[bool] = False
-    discord_welcome_enabled: Optional[bool] = False
-    discord_welcome_msg: Optional[str] = "Welcome to the Server!"
-    discord_role_on_register: Optional[str] = None
-    discord_dm_notifications: Optional[bool] = True
-    discord_role_id: Optional[str] = None
-    discord_role_name: Optional[str] = None
-    discord_section_id: Optional[str] = None
-    discord_section_name: Optional[str] = None
-    discord_member_reset_enabled: Optional[bool] = False
-    discord_login_log_enabled: Optional[bool] = False
-    discord_embed_color: Optional[str] = "#00FFAA"
-    discord_allowed_roles: Optional[str] = None
-    bot_enabled: Optional[bool] = True
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -153,10 +156,175 @@ def get_current_creator(authorization: Optional[str] = Header(None), db: Session
     if not payload:
         raise HTTPException(status_code=401, detail="Session expired")
     
-    creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
-    if not creator:
-        raise HTTPException(status_code=401, detail="Creator account not found")
-    return creator
+    role = payload.get("role", "creator")
+    if role == "reseller":
+        reseller = db.query(Reseller).filter(Reseller.id == payload.get("id")).first()
+        if not reseller:
+            raise HTTPException(status_code=401, detail="Reseller account not found")
+        
+        creator = db.query(Creator).filter(Creator.id == reseller.creator_id).first()
+        if not creator:
+            raise HTTPException(status_code=401, detail="Creator account not found")
+        
+        creator.is_reseller = True
+        creator.reseller = reseller
+        return creator
+    else:
+        creator = db.query(Creator).filter(Creator.email == payload.get("email")).first()
+        if not creator:
+            raise HTTPException(status_code=401, detail="Creator account not found")
+        creator.is_reseller = False
+        return creator
+
+def check_reseller_access(current_creator: Creator, app_id: int, action: str):
+    if not getattr(current_creator, "is_reseller", False):
+        return
+        
+    reseller = current_creator.reseller
+    allowed_ids = []
+    if reseller.allowed_apps:
+        allowed_ids = [int(x) for x in reseller.allowed_apps.split(",") if x.strip()]
+        
+    if app_id not in allowed_ids:
+        raise HTTPException(status_code=403, detail="Access denied to this application")
+        
+    if action == "manage_users" and not reseller.can_manage_users:
+        raise HTTPException(status_code=403, detail="Permission denied to manage users")
+        
+    if action == "manage_licenses" and not reseller.can_manage_licenses:
+        raise HTTPException(status_code=403, detail="Permission denied to manage licenses")
+        
+    if action == "reset_hwid" and not reseller.can_reset_hwid:
+        raise HTTPException(status_code=403, detail="Permission denied to reset HWID")
+        
+    if action == "view_logs" and not reseller.can_view_logs:
+        raise HTTPException(status_code=403, detail="Permission denied to view logs")
+
+# --- Reseller Request Models ---
+class ResellerLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ResellerCreateRequest(BaseModel):
+    username: str
+    password: str
+    allowed_apps: List[int]
+    can_view_secret: bool = False
+    can_manage_users: bool = False
+    can_manage_licenses: bool = False
+    can_reset_hwid: bool = False
+    can_view_logs: bool = False
+
+class ResellerUpdateRequest(BaseModel):
+    password: Optional[str] = None
+    allowed_apps: List[int]
+    can_view_secret: bool = False
+    can_manage_users: bool = False
+    can_manage_licenses: bool = False
+    can_reset_hwid: bool = False
+    can_view_logs: bool = False
+
+# --- Reseller Login Endpoint ---
+@app.post("/api/reseller/login")
+def reseller_login(req: ResellerLoginRequest, db: Session = Depends(get_db)):
+    reseller = db.query(Reseller).filter(Reseller.username == req.username).first()
+    if not reseller or not verify_password(req.password, reseller.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid username or password")
+        
+    token = create_access_token({"sub": reseller.username, "role": "reseller", "id": reseller.id})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": "reseller",
+        "permissions": {
+            "can_view_secret": reseller.can_view_secret,
+            "can_manage_users": reseller.can_manage_users,
+            "can_manage_licenses": reseller.can_manage_licenses,
+            "can_reset_hwid": reseller.can_reset_hwid,
+            "can_view_logs": reseller.can_view_logs
+        }
+    }
+
+# --- Creator Reseller Management ---
+@app.get("/api/creator/resellers")
+def get_resellers(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot manage resellers")
+    resellers = db.query(Reseller).filter(Reseller.creator_id == current_creator.id).all()
+    return [{
+        "id": r.id,
+        "username": r.username,
+        "allowed_apps": [int(x) for x in r.allowed_apps.split(",") if x.strip()] if r.allowed_apps else [],
+        "can_view_secret": r.can_view_secret,
+        "can_manage_users": r.can_manage_users,
+        "can_manage_licenses": r.can_manage_licenses,
+        "can_reset_hwid": r.can_reset_hwid,
+        "can_view_logs": r.can_view_logs,
+        "created_at": r.created_at
+    } for r in resellers]
+
+@app.post("/api/creator/resellers")
+def create_reseller(req: ResellerCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot manage resellers")
+        
+    # Check if username exists
+    existing = db.query(Reseller).filter(Reseller.username == req.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Reseller username already exists")
+        
+    hashed = hash_password(req.password)
+    apps_str = ",".join([str(x) for x in req.allowed_apps])
+    
+    new_reseller = Reseller(
+        creator_id=current_creator.id,
+        username=req.username,
+        password_hash=hashed,
+        allowed_apps=apps_str,
+        can_view_secret=req.can_view_secret,
+        can_manage_users=req.can_manage_users,
+        can_manage_licenses=req.can_manage_licenses,
+        can_reset_hwid=req.can_reset_hwid,
+        can_view_logs=req.can_view_logs
+    )
+    db.add(new_reseller)
+    db.commit()
+    return {"message": "Reseller created successfully"}
+
+@app.put("/api/creator/resellers/{reseller_id}")
+def update_reseller(reseller_id: int, req: ResellerUpdateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot manage resellers")
+        
+    reseller = db.query(Reseller).filter(Reseller.id == reseller_id, Reseller.creator_id == current_creator.id).first()
+    if not reseller:
+        raise HTTPException(status_code=404, detail="Reseller not found")
+        
+    if req.password:
+        reseller.password_hash = hash_password(req.password)
+        
+    reseller.allowed_apps = ",".join([str(x) for x in req.allowed_apps])
+    reseller.can_view_secret = req.can_view_secret
+    reseller.can_manage_users = req.can_manage_users
+    reseller.can_manage_licenses = req.can_manage_licenses
+    reseller.can_reset_hwid = req.can_reset_hwid
+    reseller.can_view_logs = req.can_view_logs
+    
+    db.commit()
+    return {"message": "Reseller updated successfully"}
+
+@app.delete("/api/creator/resellers/{reseller_id}")
+def delete_reseller(reseller_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot manage resellers")
+        
+    reseller = db.query(Reseller).filter(Reseller.id == reseller_id, Reseller.creator_id == current_creator.id).first()
+    if not reseller:
+        raise HTTPException(status_code=404, detail="Reseller not found")
+        
+    db.delete(reseller)
+    db.commit()
+    return {"message": "Reseller deleted successfully"}
 
 # --- Creator API Endpoints ---
 
@@ -250,10 +418,46 @@ def log_app_action(db: Session, app_id: int, action: str, description: str):
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications, "discord_role_id": app.discord_role_id, "discord_role_name": app.discord_role_name, "discord_section_id": app.discord_section_id, "discord_section_name": app.discord_section_name} for app in applications]
+    
+    is_res = getattr(current_creator, "is_reseller", False)
+    if is_res:
+        allowed_ids = []
+        if current_creator.reseller.allowed_apps:
+            allowed_ids = [int(x) for x in current_creator.reseller.allowed_apps.split(",") if x.strip()]
+        applications = [app for app in applications if app.id in allowed_ids]
+        
+    hide_secrets = is_res and not current_creator.reseller.can_view_secret
+    
+    return [{
+        "id": app.id,
+        "app_name": app.app_name,
+        "owner_id": "********" if hide_secrets else app.owner_id,
+        "secret": "********" if hide_secrets else app.secret,
+        "status": app.status,
+        "webhook_url": app.webhook_url,
+        "version": app.version,
+        "dev_message": app.dev_message,
+        "created_at": app.created_at,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
+        "discord_log_enabled": app.discord_log_enabled,
+        "discord_welcome_enabled": app.discord_welcome_enabled,
+        "discord_welcome_msg": app.discord_welcome_msg,
+        "discord_role_on_register": app.discord_role_on_register,
+        "discord_dm_notifications": app.discord_dm_notifications,
+        "discord_role_id": app.discord_role_id,
+        "discord_role_name": app.discord_role_name,
+        "discord_section_id": app.discord_section_id,
+        "discord_section_name": app.discord_section_name
+    } for app in applications]
 
 @app.post("/api/creator/apps/create")
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot create applications")
+        
     if not req.app_name or req.app_name.strip() == "":
         raise HTTPException(status_code=400, detail="App name cannot be empty")
         
@@ -267,6 +471,9 @@ def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_cur
 
 @app.delete("/api/creator/apps/{app_id}")
 def delete_app(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot delete applications")
+        
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -277,6 +484,9 @@ def delete_app(app_id: int, current_creator: Creator = Depends(get_current_creat
 
 @app.put("/api/creator/apps/{app_id}/settings")
 def update_app_settings(app_id: int, req: AppSettingsRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot change application settings")
+        
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -289,6 +499,7 @@ def update_app_settings(app_id: int, req: AppSettingsRequest, current_creator: C
 
 @app.post("/api/creator/apps/{app_id}/users")
 def add_app_user(app_id: int, req: UserCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="Application not found")
     
@@ -304,6 +515,7 @@ def add_app_user(app_id: int, req: UserCreateRequest, current_creator: Creator =
 
 @app.get("/api/creator/apps/{app_id}/users")
 def get_app_users(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     users = db.query(AppUser).filter(AppUser.app_id == app_id).order_by(AppUser.id.desc()).all()
@@ -311,6 +523,7 @@ def get_app_users(app_id: int, current_creator: Creator = Depends(get_current_cr
 
 @app.delete("/api/creator/apps/{app_id}/users/{user_id}")
 def delete_app_user(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
@@ -321,6 +534,7 @@ def delete_app_user(app_id: int, user_id: int, current_creator: Creator = Depend
 
 @app.post("/api/creator/apps/{app_id}/users/{user_id}/reset-hwid")
 def reset_user_hwid(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "reset_hwid")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
@@ -332,6 +546,7 @@ def reset_user_hwid(app_id: int, user_id: int, current_creator: Creator = Depend
 
 @app.post("/api/creator/apps/{app_id}/users/{user_id}/toggle-ban")
 def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
@@ -344,6 +559,7 @@ def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depend
 
 @app.put("/api/creator/apps/{app_id}/users/{user_id}/password")
 def update_user_password(app_id: int, user_id: int, req: UserPasswordUpdateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
@@ -356,6 +572,7 @@ def update_user_password(app_id: int, user_id: int, req: UserPasswordUpdateReque
 
 @app.post("/api/creator/apps/{app_id}/licenses")
 def create_app_licenses(app_id: int, req: LicenseCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_licenses")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="Application not found")
     
@@ -368,7 +585,7 @@ def create_app_licenses(app_id: int, req: LicenseCreateRequest, current_creator:
             app_id=app.id,
             license_key=key_str,
             hwid_lock_enabled=req.hwid_lock_enabled,
-            expires_at=req.expires_at,
+            expires_at=None,
             duration_days=req.duration_days
         )
         db.add(new_lic)
@@ -378,6 +595,7 @@ def create_app_licenses(app_id: int, req: LicenseCreateRequest, current_creator:
 
 @app.get("/api/creator/apps/{app_id}/licenses")
 def get_app_licenses(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_licenses")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     licenses = db.query(AppLicense).filter(AppLicense.app_id == app_id).order_by(AppLicense.id.desc()).all()
@@ -385,6 +603,7 @@ def get_app_licenses(app_id: int, current_creator: Creator = Depends(get_current
 
 @app.delete("/api/creator/apps/{app_id}/licenses/{license_id}")
 def delete_app_license(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_licenses")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
@@ -395,6 +614,7 @@ def delete_app_license(app_id: int, license_id: int, current_creator: Creator = 
 
 @app.post("/api/creator/apps/{app_id}/licenses/{license_id}/reset-hwid")
 def reset_license_hwid(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "reset_hwid")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
@@ -406,6 +626,7 @@ def reset_license_hwid(app_id: int, license_id: int, current_creator: Creator = 
 
 @app.post("/api/creator/apps/{app_id}/licenses/{license_id}/toggle-ban")
 def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_licenses")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
@@ -418,6 +639,7 @@ def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = 
 
 @app.get("/api/creator/apps/{app_id}/logs")
 def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "view_logs")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     logs = db.query(AppLog).filter(AppLog.app_id == app.id).order_by(AppLog.id.desc()).limit(50).all()
@@ -425,6 +647,8 @@ def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_cre
 
 @app.delete("/api/creator/apps/{app_id}/clean-banned")
 def clean_banned_entities(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    check_reseller_access(current_creator, app_id, "manage_users")
+    check_reseller_access(current_creator, app_id, "manage_licenses")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     

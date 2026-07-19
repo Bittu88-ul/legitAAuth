@@ -26,14 +26,33 @@
         </div>
         <div class="auth-right">
             <h2>Welcome Back</h2>
-            <p style="color: var(--text-muted); margin-bottom: 30px;">Sign in to access your dashboard</p>
+            <p style="color: var(--text-muted); margin-bottom: 25px;">Sign in to access your dashboard</p>
             
-            <!-- Google Sign-In Container -->
-            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+            <!-- Login Type Toggle -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; border: 1px solid var(--glass-border); padding: 5px; border-radius: 8px; background: rgba(0,0,0,0.2);">
+                <button id="toggle-creator-btn" onclick="switchLoginType('creator')" style="flex: 1; padding: 10px; margin: 0; background: var(--primary); color: white; border: none; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;">Creator Login</button>
+                <button id="toggle-reseller-btn" onclick="switchLoginType('reseller')" style="flex: 1; padding: 10px; margin: 0; background: transparent; color: var(--text-muted); border: none; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;">Reseller Login</button>
+            </div>
+            
+            <!-- Google Sign-In Container (Creator) -->
+            <div id="creator-login-container" style="display: flex; justify-content: center; margin-bottom: 20px;">
                 <div id="g_id_onload" data-client_id="588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
                     data-callback="handleGoogleLogin">
                 </div>
                 <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            </div>
+
+            <!-- Reseller Login Container -->
+            <div id="reseller-login-container" style="display: none; flex-direction: column; gap: 15px; text-align: left; width: 100%;">
+                <div>
+                    <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Username</label>
+                    <input type="text" id="reseller-username" placeholder="Enter reseller username" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                </div>
+                <div>
+                    <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Password</label>
+                    <input type="password" id="reseller-password" placeholder="Enter reseller password" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                </div>
+                <button onclick="handleResellerLogin()" style="width: 100%; padding: 12px; margin-top: 10px; background: var(--success);"><i class="fas fa-sign-in-alt"></i> Login as Reseller</button>
             </div>
             
             <p style="font-size: 13px; color: var(--text-muted); margin-top: 20px;">
@@ -50,7 +69,7 @@
                 <li><a href="#" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
                 <li><a href="#" onclick="showTab('docs')"><i class="fas fa-book"></i> Documentation</a></li>
                 <li><a href="#" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</a></li>
-<li><a href="#" onclick="showTab('discord')"><i class="fab fa-discord"></i> Discord Bot</a></li>
+                <li><a href="#" id="nav-resellers" onclick="showTab('resellers')"><i class="fas fa-users-cog"></i> Resellers</a></li>
                 <li style="margin-top: 50px;"><a href="#" onclick="openLogoutModal()"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
             </ul>
         </nav>
@@ -261,147 +280,67 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                     </pre>
                 </div>
             </div>
-            <div id="discord-tab" class="tab-content" style="display:none;">
-                <h2><i class="fab fa-discord" style="color: #5865F2; margin-right: 10px;"></i>Discord Bot Integration</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Manage all of your LegitAuth applications simultaneously inside your Discord server.</p>
+            <div id="resellers-tab" class="tab-content" style="display:none;">
+                <h2><i class="fas fa-users-cog" style="color: var(--primary); margin-right: 10px;"></i>Reseller Management</h2>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Create and manage reseller profiles with custom access permissions to specific applications.</p>
 
-                <!-- Discord Link Status -->
-                <div id="discord-link-section" style="background: rgba(0,0,0,0.3); padding: 25px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:20px;">
-                    <h3 style="margin-bottom:15px; color: white;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Connect Discord Account</h3>
-                    <div id="discord-link-status">
-                        <p style="color: var(--text-muted); margin-bottom:15px;">Link your Discord account to manage servers directly from the dashboard</p>
-                        <button onclick="linkDiscordAccount()" style="background:#5865F2; border:none; color:white; padding:10px 25px; border-radius:8px; cursor:pointer;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Link Discord Account</button>
+                <!-- Create Reseller Section -->
+                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px; margin-bottom: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);">
+                    <h3 id="reseller-form-title" style="margin-bottom: 15px; color: white;"><i class="fas fa-user-plus" style="color: var(--primary); margin-right: 8px;"></i>Create New Reseller Profile</h3>
+                    <input type="hidden" id="edit-reseller-id" value="">
+                    
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Username</label>
+                            <input type="text" id="reseller-form-username" placeholder="e.g. rohit" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Password <span id="reseller-form-pass-hint" style="color: var(--text-muted); font-size: 11px;">(leave blank to keep current)</span></label>
+                            <input type="password" id="reseller-form-password" placeholder="e.g. password123" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                        </div>
                     </div>
-                    <div id="discord-linked-status" style="display:none;">
-                        <p style="color: var(--text-muted); margin-bottom:15px;">Discord Account Linked: <strong id="discord-user-tag" style="color: var(--success);"></strong></p>
-                        <button onclick="loadDiscordGuilds()" style="width:auto; padding:8px 16px; margin-right:10px; background: var(--primary);"><i class="fas fa-sync"></i> Refresh Servers</button>
+
+                    <!-- Application Select Checkboxes -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: white; font-weight: bold; font-size: 14px; display: block; margin-bottom: 8px;">Select Allowed Applications</label>
+                        <div id="reseller-app-checkboxes" style="display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid var(--glass-border); max-height: 180px; overflow-y: auto;">
+                            <!-- Dynamically loaded app list checkboxes -->
+                        </div>
+                    </div>
+
+                    <!-- Permission Checkboxes -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="color: white; font-weight: bold; font-size: 14px; display: block; margin-bottom: 10px;">Select Access Permissions</label>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="perm-view-secret" style="width: 18px; height: 18px; cursor: pointer;"> View Secret & Owner ID
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="perm-manage-users" style="width: 18px; height: 18px; cursor: pointer;"> Manage Users (Create/Delete)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="perm-manage-licenses" style="width: 18px; height: 18px; cursor: pointer;"> Manage Licenses (Generate/Delete)
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="perm-reset-hwid" style="width: 18px; height: 18px; cursor: pointer;"> Reset HWID
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
+                                <input type="checkbox" id="perm-view-logs" style="width: 18px; height: 18px; cursor: pointer;"> View Console Logs
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="saveReseller()" style="width: auto; padding: 12px 24px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Profile</button>
+                        <button onclick="clearResellerForm()" id="btn-cancel-reseller-edit" style="display: none; width: auto; padding: 12px 24px; margin: 0; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);"><i class="fas fa-times"></i> Cancel Edit</button>
                     </div>
                 </div>
 
-                <div id="discord-integration-details" style="display:none;">
-                    <!-- Sub-tabs Navigation -->
-                    <div style="display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; width: 100%; max-width: 600px;">
-                        <button class="sub-tab-btn active" id="btn-sub-status" onclick="switchDiscordSubTab('discord-sub-status')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: white; border-bottom: 2px solid var(--primary); border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Status & Server</button>
-                        <button class="sub-tab-btn" id="btn-sub-features" onclick="switchDiscordSubTab('discord-sub-features')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: var(--text-muted); border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Feature Configurations</button>
-                        <button class="sub-tab-btn" id="btn-sub-welcome" onclick="switchDiscordSubTab('discord-sub-welcome')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: var(--text-muted); border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Welcome & Customization</button>
-                    </div>
-
-                    <!-- Sub-tab 1: Status & Server -->
-                    <div id="discord-sub-status" class="discord-sub-content">
-                        <!-- Status Card -->
-                        <div class="stat-card" style="margin-bottom: 20px; width: 100%; max-width: 600px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid var(--glass-border); border-radius: 12px;">
-                            <div>
-                                <h4 style="margin: 0; color: var(--text-muted);">Integration Status</h4>
-                                <h3 id="discord-status-text" style="margin: 5px 0 0 0; font-size: 18px; color: white;">Not Configured</h3>
-                            </div>
-                            <span id="discord-status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">Inactive</span>
-                        </div>
-
-                        <!-- Setup Form -->
-                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                            <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>Link Discord Server</h3>
-                            
-                            <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
-                            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                                <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)" style="padding:10px; flex:1; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">
-                                    <option value="">-- Select Server --</option>
-                                </select>
-                                <a id="discord-invite-link" href="#" target="_blank" style="display: inline-flex; align-items:center; gap:8px; text-decoration:none; background:#5865F2; color:white; padding:10px 15px; border-radius:8px; font-weight:bold; font-size:14px; white-space:nowrap;">
-                                    <i class="fab fa-discord"></i> Invite Bot
-                                </a>
-                            </div>
-                            <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
-                                Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
-                                <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
-                            </p>
-
-                            <div style="display: flex; gap: 10px;">
-                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Server Link</button>
-                                <button onclick="unlinkDiscordConfig()" id="discord-unlink-btn" style="display: none; width: auto; padding: 10px 20px; margin: 0; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;"><i class="fas fa-unlink"></i> Unlink</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sub-tab 2: Feature Configurations -->
-                    <div id="discord-sub-features" class="discord-sub-content" style="display: none;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                            <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>Bot Feature Configurations</h3>
-                            
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                                <div>
-                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Live Console logs to Discord</label>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Sends log events (registers, claims, resets) directly to the linked Discord channel.</span>
-                                </div>
-                                <input type="checkbox" id="discord-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                            </div>
-
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <div>
-                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Log Client Logins to Channel</label>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Sends a real-time login alert (IP, App) to your selected Discord channel.</span>
-                                </div>
-                                <input type="checkbox" id="discord-login-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                            </div>
-
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <div>
-                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Customer HWID Self-Reset</label>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Allows customers to reset their own HWID using `/hwid_reset` or `/license_reset`.</span>
-                                </div>
-                                <input type="checkbox" id="discord-member-reset-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                            </div>
-                            
-                            <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Features</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sub-tab 3: Welcome & Customization -->
-                    <div id="discord-sub-welcome" class="discord-sub-content" style="display: none;">
-                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                            <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-palette" style="margin-right: 8px;"></i>Welcome & Customization</h3>
-
-                            <div style="margin-bottom: 15px;">
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block; margin-bottom: 8px;">Bot Embed Theme Color</label>
-                                <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Select or type a color for the bot's embed messages.</span>
-                                <div style="display: flex; gap: 10px; align-items: center;">
-                                    <input type="color" id="discord-embed-color-picker" oninput="document.getElementById('discord-embed-color').value = this.value" style="width: 50px; height: 40px; border: none; padding: 0; background: transparent; cursor: pointer; border-radius: 8px;">
-                                    <input type="text" id="discord-embed-color" placeholder="#00FFAA" style="margin: 0; flex: 1; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);" oninput="document.getElementById('discord-embed-color-picker').value = this.value">
-                                </div>
-                            </div>
-
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <div>
-                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Enable Server Welcome System</label>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Welcome new members who join the Discord server.</span>
-                                </div>
-                                <input type="checkbox" id="discord-welcome-enabled" style="width: 20px; height: 20px; cursor: pointer;" onchange="toggleWelcomeInput(this.checked)">
-                            </div>
-
-                            <div id="discord-welcome-msg-container" style="margin-bottom: 15px; display: none;">
-                                <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Custom Welcome Message</label>
-                                <input type="text" id="discord-welcome-msg" placeholder="Welcome to our server!" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                            </div>
-
-                            <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Auto-Assign Role on Register</label>
-                                <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Role ID to assign when a member registers using `/register`. Leave empty to disable.</span>
-                                <input type="text" id="discord-role-on-register" placeholder="Role ID (e.g., 102435789123456789)" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                            </div>
-
-                            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <div>
-                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Direct Message (DM) Notifications</label>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Sends registration and reset confirmation details in direct messages.</span>
-                                </div>
-                                <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
-                            </div>
-                            
-                            <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Settings</button>
-                            </div>
-                        </div>
+                <!-- Resellers List Section -->
+                <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px;">
+                    <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-users" style="color: var(--primary); margin-right: 8px;"></i>Configured Reseller Profiles</h3>
+                    <div id="resellers-list-container">
+                        <!-- Loaded list table -->
                     </div>
                 </div>
             </div>
