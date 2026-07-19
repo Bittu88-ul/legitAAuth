@@ -127,6 +127,13 @@ class DiscordConfigRequest(BaseModel):
     discord_welcome_msg: Optional[str] = "Welcome to the Server!"
     discord_role_on_register: Optional[str] = None
     discord_dm_notifications: Optional[bool] = True
+    discord_role_id: Optional[str] = None
+    discord_role_name: Optional[str] = None
+    discord_section_id: Optional[str] = None
+    discord_section_name: Optional[str] = None
+    discord_member_reset_enabled: Optional[bool] = False
+    discord_login_log_enabled: Optional[bool] = False
+    discord_embed_color: Optional[str] = "#00FFAA"
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -198,15 +205,50 @@ def google_login(req: GoogleLoginRequest, db: Session = Depends(get_db)):
         print(f"Google Token Validation Error: {e}")
         raise HTTPException(status_code=401, detail=f"Google Token Error: {e}")
 
+def send_discord_log(guild_id: str, channel_id: str, message: str):
+    if not DISCORD_BOT_TOKEN or not channel_id:
+        return
+    url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {"content": message}
+    try:
+        requests.post(url, json=payload, headers=headers, timeout=3)
+    except Exception as e:
+        print(f"Error sending Discord log: {e}")
+
 def log_app_action(db: Session, app_id: int, action: str, description: str):
     new_log = AppLog(app_id=app_id, action=action, description=description)
     db.add(new_log)
     db.commit()
+    
+    # Send log to Discord if enabled
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if app:
+        creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+        if creator and creator.discord_channel_id:
+            # Check if logs are enabled, or specifically login logs for SUCCESS/FAIL
+            should_send = creator.discord_log_enabled
+            if ("LOGIN" in action) and creator.discord_login_log_enabled:
+                should_send = True
+                
+            if should_send:
+                emoji = "📝"
+                if "SUCCESS" in action: emoji = "🟢"
+                elif "FAILED" in action or "FAIL" in action: emoji = "🔴"
+                elif "BAN" in action: emoji = "🔨"
+                elif "RESET" in action: emoji = "🔄"
+                elif "CREATED" in action: emoji = "➕"
+                
+                msg = f"{emoji} **[LOG: {action}]** {description} (App: `{app.app_name}`)"
+                send_discord_log(creator.discord_guild_id, creator.discord_channel_id, msg)
 
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications} for app in applications]
+    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications, "discord_role_id": app.discord_role_id, "discord_role_name": app.discord_role_name, "discord_section_id": app.discord_section_id, "discord_section_name": app.discord_section_name} for app in applications]
 
 @app.post("/api/creator/apps/create")
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -447,17 +489,75 @@ def update_app_discord_config(app_id: int, req: DiscordConfigRequest, current_cr
     app.discord_welcome_msg = req.discord_welcome_msg
     app.discord_role_on_register = req.discord_role_on_register
     app.discord_dm_notifications = req.discord_dm_notifications
+    app.discord_role_id = req.discord_role_id
+    app.discord_role_name = req.discord_role_name
+    app.discord_section_id = req.discord_section_id
+    app.discord_section_name = req.discord_section_name
     db.commit()
     return {"message": "Discord integration settings updated"}
 
+@app.get("/api/creator/discord/config")
+def get_creator_discord_config(current_creator: Creator = Depends(get_current_creator)):
+    return {
+        "discord_guild_id": current_creator.discord_guild_id,
+        "discord_channel_id": current_creator.discord_channel_id,
+        "discord_guild_name": current_creator.discord_guild_name,
+        "discord_channel_name": current_creator.discord_channel_name,
+        "discord_role_id": current_creator.discord_role_id,
+        "discord_role_name": current_creator.discord_role_name,
+        "discord_log_enabled": current_creator.discord_log_enabled,
+        "discord_welcome_enabled": current_creator.discord_welcome_enabled,
+        "discord_welcome_msg": current_creator.discord_welcome_msg,
+        "discord_role_on_register": current_creator.discord_role_on_register,
+        "discord_dm_notifications": current_creator.discord_dm_notifications,
+        "discord_member_reset_enabled": current_creator.discord_member_reset_enabled,
+        "discord_login_log_enabled": current_creator.discord_login_log_enabled,
+        "discord_embed_color": current_creator.discord_embed_color or "#00FFAA"
+    }
+
+@app.put("/api/creator/discord/config")
+def update_creator_discord_config(req: DiscordConfigRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    current_creator.discord_guild_id = req.discord_guild_id
+    current_creator.discord_channel_id = req.discord_channel_id
+    current_creator.discord_guild_name = req.discord_guild_name
+    current_creator.discord_channel_name = req.discord_channel_name
+    current_creator.discord_role_id = req.discord_role_id
+    current_creator.discord_role_name = req.discord_role_name
+    current_creator.discord_log_enabled = req.discord_log_enabled
+    current_creator.discord_welcome_enabled = req.discord_welcome_enabled
+    current_creator.discord_welcome_msg = req.discord_welcome_msg
+    current_creator.discord_role_on_register = req.discord_role_on_register
+    current_creator.discord_dm_notifications = req.discord_dm_notifications
+    current_creator.discord_member_reset_enabled = req.discord_member_reset_enabled
+    current_creator.discord_login_log_enabled = req.discord_login_log_enabled
+    current_creator.discord_embed_color = req.discord_embed_color
+    
+    # Sync to all apps of this creator
+    apps = db.query(Application).filter(Application.creator_id == current_creator.id).all()
+    for app in apps:
+        app.discord_guild_id = req.discord_guild_id
+        app.discord_channel_id = req.discord_channel_id
+        app.discord_guild_name = req.discord_guild_name
+        app.discord_channel_name = req.discord_channel_name
+        app.discord_role_id = req.discord_role_id
+        app.discord_role_name = req.discord_role_name
+        app.discord_log_enabled = req.discord_log_enabled
+        app.discord_welcome_enabled = req.discord_welcome_enabled
+        app.discord_welcome_msg = req.discord_welcome_msg
+        app.discord_role_on_register = req.discord_role_on_register
+        app.discord_dm_notifications = req.discord_dm_notifications
+        
+    db.commit()
+    return {"message": "Global Discord configuration updated successfully"}
+
 @app.get("/api/creator/discord/app-by-channel/{channel_id}")
-def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+def get_app_by_discord_channel(channel_id: str, db: Session = Depends(get_db)):
     app = db.query(Application).filter(
-        Application.creator_id == current_creator.id,
         Application.discord_channel_id == channel_id
     ).first()
     if not app:
         raise HTTPException(status_code=404, detail="No application linked to this channel")
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
     return {
         "id": app.id,
         "app_name": app.app_name,
@@ -474,7 +574,82 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
         "discord_welcome_enabled": app.discord_welcome_enabled,
         "discord_welcome_msg": app.discord_welcome_msg,
         "discord_role_on_register": app.discord_role_on_register,
-        "discord_dm_notifications": app.discord_dm_notifications
+        "discord_dm_notifications": app.discord_dm_notifications,
+        "discord_role_id": app.discord_role_id,
+        "discord_role_name": app.discord_role_name,
+        "discord_section_id": app.discord_section_id,
+        "discord_section_name": app.discord_section_name,
+        "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
+        "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
+    }
+
+@app.get("/api/creator/discord/app-by-section/{section_id}")
+def get_app_by_discord_section(section_id: str, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(
+        Application.discord_section_id == section_id
+    ).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="No application linked to this section")
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    return {
+        "id": app.id,
+        "app_name": app.app_name,
+        "owner_id": app.owner_id,
+        "secret": app.secret,
+        "status": app.status,
+        "version": app.version,
+        "dev_message": app.dev_message,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
+        "discord_log_enabled": app.discord_log_enabled,
+        "discord_welcome_enabled": app.discord_welcome_enabled,
+        "discord_welcome_msg": app.discord_welcome_msg,
+        "discord_role_on_register": app.discord_role_on_register,
+        "discord_dm_notifications": app.discord_dm_notifications,
+        "discord_role_id": app.discord_role_id,
+        "discord_role_name": app.discord_role_name,
+        "discord_section_id": app.discord_section_id,
+        "discord_section_name": app.discord_section_name,
+        "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
+        "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
+    }
+
+@app.get("/api/creator/discord/app-by-guild/{guild_id}")
+def get_app_by_discord_guild(guild_id: str, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(
+        Application.discord_guild_id == guild_id
+    ).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="No application linked to this server")
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    return {
+        "id": app.id,
+        "app_name": app.app_name,
+        "owner_id": app.owner_id,
+        "secret": app.secret,
+        "status": app.status,
+        "version": app.version,
+        "dev_message": app.dev_message,
+        "discord_guild_id": app.discord_guild_id,
+        "discord_channel_id": app.discord_channel_id,
+        "discord_guild_name": app.discord_guild_name,
+        "discord_channel_name": app.discord_channel_name,
+        "discord_log_enabled": app.discord_log_enabled,
+        "discord_welcome_enabled": app.discord_welcome_enabled,
+        "discord_welcome_msg": app.discord_welcome_msg,
+        "discord_role_on_register": app.discord_role_on_register,
+        "discord_dm_notifications": app.discord_dm_notifications,
+        "discord_role_id": app.discord_role_id,
+        "discord_role_name": app.discord_role_name,
+        "discord_section_id": app.discord_section_id,
+        "discord_section_name": app.discord_section_name,
+        "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
+        "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
     }
 
 # --- Discord OAuth2 Endpoints ---
@@ -644,6 +819,28 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
     channels = [c for c in res.json() if c["type"] ==0] # Only text channels
     return channels
 
+@app.get("/api/creator/discord/guilds/{guild_id}/sections")
+def get_discord_guild_sections(guild_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if not DISCORD_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="Discord bot token missing")
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}/channels", headers=headers)
+    if res.status_code != 200:
+        raise HTTPException(status_code=400, detail="Could not get sections from bot, make sure bot is in the server")
+    sections = [{"id": c.get("id"), "name": c.get("name")} for c in res.json() if c.get("type") == 4]
+    return sections
+
+@app.get("/api/creator/discord/guilds/{guild_id}/roles")
+def get_discord_guild_roles(guild_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if not DISCORD_BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="Discord bot token missing")
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}/roles", headers=headers)
+    if res.status_code != 200:
+        raise HTTPException(status_code=400, detail="Could not get roles from bot, make sure bot is in the server")
+    roles = [{"id": r.get("id"), "name": r.get("name")} for r in res.json()]
+    return roles
+
 @app.get("/api/creator/discord/invite-url")
 def get_bot_invite_url(guild_id: Optional[str] = None):
     return {
@@ -757,3 +954,73 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__
 @app.get("/")
 def redirect_to_dashboard():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "dashboard.html"))
+
+# --- Customer Self-Service HWID Reset Endpoints ---
+class MemberResetHWIDRequest(BaseModel):
+    username: str
+    password: str
+    app_id: Optional[int] = None
+
+@app.post("/api/creator/discord/reset-member-hwid")
+def reset_member_hwid(req: MemberResetHWIDRequest, db: Session = Depends(get_db)):
+    user = None
+    app = None
+    if req.app_id:
+        app = db.query(Application).filter(Application.id == req.app_id).first()
+        if app:
+            user = db.query(AppUser).filter(AppUser.app_id == app.id, AppUser.username == req.username).first()
+    else:
+        users = db.query(AppUser).filter(AppUser.username == req.username).all()
+        if len(users) == 1:
+            user = users[0]
+            app = db.query(Application).filter(Application.id == user.app_id).first()
+        elif len(users) > 1:
+            raise HTTPException(status_code=400, detail="Multiple users found with this name. Please specify App ID.")
+    
+    if not user or not app:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    if not creator or not creator.discord_member_reset_enabled:
+        raise HTTPException(status_code=403, detail="Member self HWID reset is disabled by the administrator.")
+        
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+        
+    user.hwid = None
+    db.commit()
+    log_app_action(db, app.id, "MEMBER_HWID_RESET", f"User {user.username} reset their own HWID via Discord Bot")
+    return {"success": True, "message": f"HWID reset successfully for user **{user.username}**."}
+
+class MemberResetLicenseRequest(BaseModel):
+    license_key: str
+    app_id: Optional[int] = None
+
+@app.post("/api/creator/discord/reset-member-license")
+def reset_member_license(req: MemberResetLicenseRequest, db: Session = Depends(get_db)):
+    lic = None
+    app = None
+    if req.app_id:
+        app = db.query(Application).filter(Application.id == req.app_id).first()
+        if app:
+            lic = db.query(AppLicense).filter(AppLicense.app_id == app.id, AppLicense.license_key == req.license_key).first()
+    else:
+        lics = db.query(AppLicense).filter(AppLicense.license_key == req.license_key).all()
+        if len(lics) == 1:
+            lic = lics[0]
+            app = db.query(Application).filter(Application.id == lic.app_id).first()
+        elif len(lics) > 1:
+            raise HTTPException(status_code=400, detail="Multiple license records found. Please specify App ID.")
+    
+    if not lic or not app:
+        raise HTTPException(status_code=404, detail="License key not found")
+        
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    if not creator or not creator.discord_member_reset_enabled:
+        raise HTTPException(status_code=403, detail="Member self HWID reset is disabled by the administrator.")
+        
+    lic.hwid = None
+    db.commit()
+    log_app_action(db, app.id, "MEMBER_HWID_RESET", f"License {lic.license_key} reset their own HWID via Discord Bot")
+    return {"success": True, "message": "License HWID reset successfully."}
+
