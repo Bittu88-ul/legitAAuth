@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegitAuth - Professional License System</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <div class="auth-wrapper" id="auth-container">
+        <div class="auth-left">
+            <h1 class="brand-title"><i class="fas fa-shield-alt"></i> LegitAuth</h1>
+            <p class="brand-subtitle">The Ultimate License Management Platform</p>
+            <ul class="feature-list">
+                <li><i class="fas fa-check-circle"></i> Secure Hardware ID Locking</li>
+                <li><i class="fas fa-check-circle"></i> Instant Cloud Delivery</li>
+                <li><i class="fas fa-check-circle"></i> Advanced Dashboard Analytics</li>
+            </ul>
+        </div>
+        <div class="auth-right">
+            <h2>Welcome Back</h2>
+            <p style="color: var(--text-muted); margin-bottom: 30px;">Sign in to access your dashboard</p>
+            
+            <!-- Google Sign-In Container -->
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <div id="g_id_onload" data-client_id="588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
+                    data-callback="handleGoogleLogin">
+                </div>
+                <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+            </div>
+            
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 20px;">
+                By signing in, you agree to our Terms of Service & Privacy Policy.
+            </p>
+        </div>
+    </div>
+
+    <div class="dashboard-container" id="dashboard-container" style="display:none;">
+        <nav>
+            <h2>LegitAuth</h2>
+            <ul>
+                <li><a href="#" onclick="showTab('apps')"><i class="fas fa-layer-group"></i> Applications</a></li>
+                <li><a href="#" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
+                <li><a href="#" onclick="showTab('docs')"><i class="fas fa-book"></i> Documentation</a></li>
+                <li><a href="#" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</a></li>
+<li><a href="#" onclick="showTab('discord')"><i class="fab fa-discord"></i> Discord Bot</a></li>
+                <li style="margin-top: 50px;"><a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            </ul>
+        </nav>
+        <main>
+            <div id="apps-tab" class="tab-content">
+
+                <!-- Dashboard Analytics Overview -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <i class="fas fa-cubes icon"></i>
+                        <h4>Total Apps</h4>
+                        <h2 id="stat-apps">0</h2>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-users icon"></i>
+                        <h4>Active Users</h4>
+                        <h2 id="stat-users">0</h2>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-key icon"></i>
+                        <h4>Licenses Issued</h4>
+                        <h2 id="stat-licenses">0</h2>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-server icon"></i>
+                        <h4>System Status</h4>
+                        <h2 style="color: var(--success); font-size: 24px;">Online</h2>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 16px; border: 1px solid var(--glass-border);">
+                    <h3 style="margin-bottom: 15px;"><i class="fas fa-chart-line"></i> Analytics Overview</h3>
+                    <canvas id="growthChart" height="80"></canvas>
+                </div>
+
+                <h2 style="margin-top: 30px;">Your Applications</h2>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="new-app-name" placeholder="App Name" style="width: 300px;">
+                    <button onclick="createApp()" style="width: 150px; margin-top: 10px;"><i class="fas fa-plus"></i> Create App</button>
+                </div>
+                <div id="app-list"></div>
+            </div>
+
+            <div id="workspace-tab" class="tab-content" style="display:none;">
+                <h2>Application Workspace</h2>
+                <div style="margin-bottom: 20px;">
+                    <label>Select Application: </label>
+                    <select id="app-selector" onchange="switchWorkspaceApp(this.value)" style="padding: 10px; width: 300px; border-radius: 8px;">
+                        <option value="">-- Select an App --</option>
+                    </select>
+                </div>
+                
+                <div id="app-workspace-content" style="display:none; margin-top: 30px;">
+                    <div class="app-tabs" style="display:flex; gap:10px; margin-bottom: 20px;">
+                        <button id="btn-tab-users" class="tab-btn active-tab-btn" onclick="showAppTab('users')" style="width:auto; padding:8px 16px;"><i class="fas fa-users"></i> Users</button>
+                        <button id="btn-tab-licenses" class="tab-btn" onclick="showAppTab('licenses')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-key"></i> Licenses</button>
+                        <button id="btn-tab-logs" class="tab-btn" onclick="showAppTab('logs')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-terminal"></i> Console</button>
+                        <button id="btn-tab-settings" class="tab-btn" onclick="showAppTab('settings')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-cog"></i> Settings</button>
+                    </div>
+
+                    <div id="app-users-tab" class="app-sub-tab">
+                        <h4>Create User</h4>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <input type="text" id="new-user-name" placeholder="Username" style="width:200px; margin:0;">
+                            <input type="password" id="new-user-pass" placeholder="Password" style="width:200px; margin:0;">
+                            <input type="datetime-local" id="new-user-expiry" style="width:200px; margin:0;">
+                            <label><input type="checkbox" id="new-user-hwid" checked> HWID Lock</label>
+                            <button onclick="addUser()" style="width:auto; padding: 16px 32px;">Add User</button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-top:20px; align-items:center;">
+                            <input type="text" id="search-users" placeholder="Search Users..." onkeyup="filterTable('user-list', this.value)" style="width:300px; margin:0;">
+                            <button onclick="exportCSV('users')" style="width:auto; padding: 10px 20px; background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="fas fa-download"></i> Export CSV</button>
+                        </div>
+                        <div id="user-list"></div>
+                    </div>
+
+                    <div id="app-licenses-tab" class="app-sub-tab" style="display:none;">
+                        <h4>Generate Licenses</h4>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <input type="number" id="new-lic-amount" placeholder="Amount" value="1" min="1" style="width:100px; margin:0;">
+                            <input type="number" id="new-lic-days" placeholder="Duration (Days)" value="30" style="width:150px; margin:0;">
+                            <label><input type="checkbox" id="new-lic-hwid" checked> HWID Lock</label>
+                            <button onclick="generateLicenses()" style="width:auto; padding: 16px 32px;">Generate</button>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-top:20px; align-items:center;">
+                            <input type="text" id="search-licenses" placeholder="Search Licenses..." onkeyup="filterTable('license-list', this.value)" style="width:300px; margin:0;">
+                            <button onclick="exportCSV('licenses')" style="width:auto; padding: 10px 20px; background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="fas fa-download"></i> Export CSV</button>
+                        </div>
+                        <div id="license-list"></div>
+                    </div>
+
+                    <div id="app-logs-tab" class="app-sub-tab" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h4><i class="fas fa-terminal"></i> Live Server Console</h4>
+                            <button onclick="loadAppWorkspaceData()" style="width:auto; padding:6px 12px; font-size:12px;"><i class="fas fa-sync-alt"></i> Refresh Logs</button>
+                        </div>
+                        <div id="log-list" style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; margin-top: 15px; height: 350px; overflow-y: auto; font-family: monospace; border: 1px solid var(--glass-border);">
+                            <span style="color: var(--text-muted);">Awaiting logs...</span>
+                        </div>
+                    </div>
+
+                    <div id="app-settings-tab" class="app-sub-tab" style="display:none;">
+                        <h4><i class="fas fa-sliders-h"></i> Manage App Settings</h4>
+                        <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; max-width: 600px;">
+                            <label style="color: var(--text-muted); font-size: 14px;">App Status</label>
+                            <select id="settings-status">
+                                <option value="active">🟢 Active (Normal Operation)</option>
+                                <option value="paused">🔴 Paused (Maintenance Mode)</option>
+                            </select>
+
+                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">Discord Webhook URL (Login Alerts)</label>
+                            <input type="text" id="settings-webhook" placeholder="https://discord.com/api/webhooks/..." style="margin-top: 5px;">
+
+                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">App Version</label>
+                            <input type="text" id="settings-version" placeholder="1.0.0" style="margin-top: 5px;">
+
+                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">Developer MOTD Message</label>
+                            <input type="text" id="settings-dev-msg" placeholder="Welcome to our app!" style="margin-top: 5px;">
+
+                            <button onclick="saveAppSettings()" style="margin-top: 20px;"><i class="fas fa-save"></i> Save Settings</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="docs-tab" class="tab-content" style="display:none;">
+                <h2>Developer Documentation</h2>
+                <p>Welcome to the LegitAuth integration guide. Choose your authentication method below.</p>
+                <a href="/download/auth" target="_blank"><button style="width:200px; margin-bottom: 20px;">Download Auth.cs</button></a>
+
+                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h3 style="color: var(--primary);">Initialization (Required for Both)</h3>
+                    <p>Add <code>Auth.cs</code> to your C# Project.</p>
+                    <p style="color: #fbbf24; font-size: 0.9em;">⚠️ Note: If you get a "System.Text.Json" error, please install the <b>System.Text.Json</b> package via NuGet Package Manager.</p>
+                    <pre>
+using Auth; // Add this at the very top!
+
+// In Form Load
+private void Form1_Load(object sender, EventArgs e)
+{
+    LegitAuthApp.init(
+        "APP_NAME",
+        "OWNER_ID",
+        "SECRET",
+        "1.0"
+    );
+    
+    // Optional: Auto-load saved credentials
+    string savedUser, savedPass;
+    LegitAuthApp.LoadCredentials(out savedUser, out savedPass);
+    User.Text = savedUser;
+    Pass.Text = savedPass;
+}
+                    </pre>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h3 style="color: var(--primary);">Method 1: Username & Password Login</h3>
+                    <pre>
+// In Login Button
+private async void btnLogin_Click(object sender, EventArgs e)
+{
+    await LegitAuthApp.login(User.Text, Pass.Text);
+    
+    if (LegitAuthApp.response.success)
+    {
+        // Auto-save credentials for next time
+        LegitAuthApp.SaveCredentials(User.Text, Pass.Text);
+        
+        Form1 main = new Form1();
+        main.Show();
+        this.Hide();
+    }
+    else
+    {
+        status.Text = LegitAuthApp.response.message;
+        Console.Beep(400, 300);
+    }
+}
+                    </pre>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px;">
+                    <h3 style="color: var(--primary);">Method 2: License Key Login</h3>
+                    <pre>
+// In Login Button
+private async void btnLoginKey_Click(object sender, EventArgs e)
+{
+    await LegitAuthApp.license(License.Text);
+    
+    if (LegitAuthApp.response.success)
+    {
+        Form1 main = new Form1();
+        main.Show();
+        this.Hide();
+    }
+    else
+    {
+        status.Text = LegitAuthApp.response.message;
+        Console.Beep(400, 300);
+    }
+}
+                    </pre>
+                </div>
+            </div>
+            <div id="discord-tab" class="tab-content" style="display:none;">
+                <h2><i class="fab fa-discord" style="color: #5865F2; margin-right: 10px;"></i>Discord Bot Integration</h2>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Manage LegitAuth applications directly inside your Discord server.</p>
+
+                <!-- Discord Link Status -->
+                <div id="discord-link-section" style="background: rgba(0,0,0,0.3); padding: 25px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:20px;">
+                    <h3 style="margin-bottom:15px; color: white;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Connect Discord Account</h3>
+                    <div id="discord-link-status">
+                        <p style="color: var(--text-muted); margin-bottom:15px;">Link your Discord account to manage servers directly from the dashboard</p>
+                        <button onclick="linkDiscordAccount()" style="background:#5865F2; border:none; color:white; padding:10px 25px; border-radius:8px; cursor:pointer;"><i class="fab fa-discord" style="margin-right: 8px;"></i>Link Discord Account</button>
+                    </div>
+                    <div id="discord-linked-status" style="display:none;">
+                        <p style="color: var(--text-muted); margin-bottom:15px;">Discord Account Linked: <strong id="discord-user-tag" style="color: var(--success);"></strong></p>
+                        <button onclick="loadDiscordGuilds()" style="width:auto; padding:8px 16px; margin-right:10px; background: var(--primary);"><i class="fas fa-sync"></i> Refresh Servers</button>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-layer-group" style="margin-right: 8px;"></i>1. Select Application</h3>
+                    <select id="discord-app-selector" onchange="switchDiscordApp(this.value)" style="padding: 10px; width: 100%; max-width: 400px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                        <option value="">-- Select an App to Integrate --</option>
+                    </select>
+                </div>
+
+                <div id="discord-integration-details" style="display:none;">
+                    <!-- Status Card -->
+                    <div class="stat-card" style="margin-bottom: 20px; width: 100%; max-width: 600px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid var(--glass-border); border-radius: 12px;">
+                        <div>
+                            <h4 style="margin: 0; color: var(--text-muted);">Integration Status</h4>
+                            <h3 id="discord-status-text" style="margin: 5px 0 0 0; font-size: 18px; color: white;">Not Configured</h3>
+                        </div>
+                        <span id="discord-status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">Inactive</span>
+                    </div>
+
+                    <!-- Setup Form -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
+                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>2. Link Discord Server & Channel</h3>
+                        
+                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
+                        <div style="display:flex; gap:10px; margin-bottom:20px;">
+                            <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)" style="padding:10px; flex:1; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">
+                                <option value="">-- Select Server --</option>
+                            </select>
+                            <a id="discord-invite-link" href="#" target="_blank" style="display: inline-flex; align-items:center; gap:8px; text-decoration:none; background:#5865F2; color:white; padding:10px 15px; border-radius:8px; font-weight:bold; font-size:14px; white-space:nowrap;">
+                                <i class="fab fa-discord"></i> Invite Bot
+                            </a>
+                        </div>
+                        <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
+                            Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
+                            <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
+                        </p>
+
+                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Channel</label>
+                        <select id="discord-channel-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
+                            <option value="">-- Choose Channel --</option>
+                        </select>
+
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Configuration</button>
+                            <button onclick="unlinkDiscordConfig()" id="discord-unlink-btn" style="display: none; width: auto; padding: 10px 20px; margin: 0; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;"><i class="fas fa-unlink"></i> Unlink</button>
+                        </div>
+                    </div>
+
+                    <!-- Bot Features Configuration Form -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px; margin-top: 20px;">
+                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>3. Bot Feature Configurations</h3>
+                        
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                            <div>
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Live Console logs to Discord</label>
+                                <span style="color: var(--text-muted); font-size: 12px;">Sends log events (registers, claims, resets) directly to the linked Discord channel.</span>
+                            </div>
+                            <input type="checkbox" id="discord-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <div>
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Enable Server Welcome System</label>
+                                <span style="color: var(--text-muted); font-size: 12px;">Welcome new members who join the Discord server.</span>
+                            </div>
+                            <input type="checkbox" id="discord-welcome-enabled" style="width: 20px; height: 20px; cursor: pointer;" onchange="toggleWelcomeInput(this.checked)">
+                        </div>
+
+                        <div id="discord-welcome-msg-container" style="margin-bottom: 15px; display: none;">
+                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Custom Welcome Message</label>
+                            <input type="text" id="discord-welcome-msg" placeholder="Welcome to our server!" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                        </div>
+
+                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Auto-Assign Role on Register</label>
+                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Role ID to assign when a member registers using `/register`. Leave empty to disable.</span>
+                            <input type="text" id="discord-role-on-register" placeholder="Role ID (e.g., 102435789123456789)" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <div>
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Direct Message (DM) Notifications</label>
+                                <span style="color: var(--text-muted); font-size: 12px;">Sends registration and reset confirmation details in direct messages.</span>
+                            </div>
+                            <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="settings-tab" class="tab-content" style="display:none;">
+                <h2>Account Settings</h2>
+                <div style="background: rgba(0,0,0,0.3); padding: 30px; border-radius: 12px; margin-top: 20px;">
+                    <h3 style="color: white; margin-bottom: 20px;"><i class="fas fa-user-circle"></i> Profile Overview</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 10px;">Email: <span id="profile-email" style="color: white;">Loading...</span></p>
+                    <div style="display:inline-block; padding: 12px 24px; background: rgba(255,255,255,0.05); border-radius: 8px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
+                        <i class="fab fa-google" style="color: white; margin-right: 8px;"></i> Authenticated via Google Workspace
+                    </div>
+                    
+                    <h3 style="color: white; margin-bottom: 15px; margin-top:30px;"><i class="fas fa-key"></i> Your API Token (LegitAuth)</h3>
+                    <p style="color: var(--text-muted); margin-bottom:8px;">Ye token Discord bot ko backend se communicate karne ke liye chahiye:</p>
+                    <div style="display:flex; gap:10px; margin-bottom:20px;">
+                        <input type="text" id="profile-api-token" readonly style="flex:1; background: rgba(0,0,0,0.5); color: white; font-family: monospace; padding:10px; border-radius:8px; border:1px solid var(--glass-border);" />
+                        <button onclick="copyToClipboard(document.getElementById('profile-api-token').value)" style="width:auto; padding: 0 20px; height: 46px;"><i class="fas fa-copy"></i></button>
+                    </div>
+
+                    <h3 style="color: white; margin-bottom: 15px;"><i class="fas fa-palette"></i> Theme Customization</h3>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="setTheme('#8b5cf6')" style="width:40px; height:40px; background:#8b5cf6; border-radius:50%;"></button>
+                        <button onclick="setTheme('#3b82f6')" style="width:40px; height:40px; background:#3b82f6; border-radius:50%;"></button>
+                        <button onclick="setTheme('#10b981')" style="width:40px; height:40px; background:#10b981; border-radius:50%;"></button>
+                        <button onclick="setTheme('#f43f5e')" style="width:40px; height:40px; background:#f43f5e; border-radius:50%;"></button>
+                        <button onclick="setTheme('#f59e0b')" style="width:40px; height:40px; background:#f59e0b; border-radius:50%;"></button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <footer>
+        &copy; 2026 LegitAuth. All rights reserved. Designed for Professionals.
+    </footer>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

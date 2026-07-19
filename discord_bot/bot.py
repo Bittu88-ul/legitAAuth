@@ -1,0 +1,737 @@
+import os
+import json
+import asyncio
+import re
+from datetime import datetime, timedelta
+from typing import Optional
+import discord
+from discord import app_commands
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_BASE = os.getenv("LEGITAUTH_API_URL", "https://legitauth1-3.onrender.com")
+DEFAULT_API_TOKEN = os.getenv("LEGITAUTH_API_TOKEN")  # Fallback for owner
+
+def parse_expiry(expiry_str: Optional[str]) -> Optional[str]:
+    if not expiry_str or expiry_str.strip().lower() in ("none", "never", "lifetime", "null", "0", ""):
+        return None
+    
+    # Check if they just wrote a plain number of days, e.g. "30"
+    if expiry_str.strip().isdigit():
+        days_val = int(expiry_str.strip())
+        if days_val <= 0:
+            return None
+        dt = datetime.utcnow() + timedelta(days=days_val)
+        return dt.isoformat()
+    
+    # Try parsing format like 1d, 12h, 30m, 1y, etc.
+    pattern = re.compile(r"^(\d+)([dhmwy]?)$", re.IGNORECASE)
+    match = pattern.match(expiry_str.strip())
+    if match:
+        val = int(match.group(1))
+        unit = match.group(2).lower() if match.group(2) else "d"
+        
+        now = datetime.utcnow()
+        if unit == "d":
+            dt = now + timedelta(days=val)
+        elif unit == "h":
+            dt = now + timedelta(hours=val)
+        elif unit == "m":
+            dt = now + timedelta(minutes=val)
+        elif unit == "w":
+            dt = now + timedelta(weeks=val)
+        elif unit == "y":
+            dt = now + timedelta(days=val * 365)
+        else:
+            return None
+        return dt.isoformat()
+    
+    # Check if they wrote it as a plain ISO date already, just in case
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            dt = datetime.strptime(expiry_str.strip(), fmt)
+            return dt.isoformat()
+        except ValueError:
+            continue
+            
+    return None
+
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+
+tree = app_commands.CommandTree(client)
+
+# File to store user tokens
+USER_TOKENS_FILE = "user_tokens.json"
+
+# Load existing tokens if file exists
+def load_user_tokens():
+    if os.path.exists(USER_TOKENS_FILE):
+        try:
+            with open(USER_TOKENS_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading user tokens: {e}")
+            return {}
+    return {}
+
+def save_user_tokens(tokens):
+    with open(USER_TOKENS_FILE, "w") as f:
+        json.dump(tokens, f)
+
+# Load tokens on start
+user_tokens: dict[str, str] = load_user_tokens()  # key: str(user_id), value: api_token
+user_selected_app: dict[int, dict] = {}
+
+def api_headers_for_user(user_id: int):
+    user_id_str = str(user_id)
+    token = user_tokens.get(user_id_str, DEFAULT_API_TOKEN)
+    return {"Authorization": f"Bearer {token}"}
+
+def api_headers():
+    return {"Authorization": f"Bearer {DEFAULT_API_TOKEN}"}
+
+def get_linked_app(channel_id: int, user_id: int):
+    url = f"{API_BASE}/api/creator/discord/app-by-channel/{channel_id}"
+    try:
+        resp = requests.get(url, headers=api_headers_for_user(user_id))
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return None
+
+def get_current_app(interaction: discord.Interaction):
+    app = user_selected_app.get(interaction.user.id)
+    if not app:
+        app = get_linked_app(interaction.channel_id, interaction.user.id)
+    return app
+
+# New commands for linking/unlinking token
+@tree.command(name="link_token", description="Link your LegitAuth API token to use the bot")
+@app_commands.describe(api_token="Your API token from LegitAuth Settings tab")
+async def link_token(interaction: discord.Interaction, api_token: str):
+    # Test if token is valid
+    test_url = f"{API_BASE}/api/creator/apps"
+    test_resp = requests.get(test_url, headers={"Authorization": f"Bearer {api_token}"})
+    if test_resp.status_code != 200:
+        await interaction.response.send_message("❌ Invalid token! Please check and try again.", ephemeral=True)
+        return
+    
+    # Save token
+    user_id_str = str(interaction.user.id)
+    user_tokens[user_id_str] = api_token
+    save_user_tokens(user_tokens)
+    await interaction.response.send_message("✅ Token linked successfully! You can now use the bot commands.", ephemeral=True)
+
+@tree.command(name="unlink_token", description="Unlink your LegitAuth API token from the bot")
+async def unlink_token(interaction: discord.Interaction):
+    user_id_str = str(interaction.user.id)
+    if user_id_str in user_tokens:
+        del user_tokens[user_id_str]
+        save_user_tokens(user_tokens)
+    await interaction.response.send_message("✅ Token unlinked successfully.", ephemeral=True)
+
+@tree.command(name="list_apps", description="List your LegitAuth applications")
+async def list_apps(interaction: discord.Interaction):
+    url = f"{API_BASE}/api/creator/apps"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch apps. Did you link your token with /link_token?", ephemeral=True)
+        return
+    apps = resp.json()
+    if not apps:
+        await interaction.response.send_message("No applications found.", ephemeral=True)
+        return
+    embed = discord.Embed(title="Your Applications", color=0x00FFAA)
+    for app in apps:
+        guild_name = app.get("discord_guild_name") or "None"
+        channel_name = app.get("discord_channel_name") or "None"
+        embed.add_field(
+            name=app["app_name"],
+            value=f"ID: {app['id']}\nLinked Discord: {guild_name} (#{channel_name})",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="select_app", description="Select an application to work with")
+@app_commands.describe(app_id="Application ID from /list_apps")
+async def select_app(interaction: discord.Interaction, app_id: int):
+    url = f"{API_BASE}/api/creator/apps"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Unable to verify app. Did you link your token with /link_token?", ephemeral=True)
+        return
+    apps = resp.json()
+    selected = next((a for a in apps if a["id"] == app_id), None)
+    if not selected:
+        await interaction.response.send_message("App ID not found under your account.", ephemeral=True)
+        return
+    user_selected_app[interaction.user.id] = selected
+    await interaction.response.send_message(f"Selected app **{selected['app_name']}** (ID: {app_id}).", ephemeral=True)
+
+@tree.command(name="create_user", description="Create a new user/password for the selected app")
+@app_commands.describe(username="New username", password="Password", expires_at="Duration (e.g. 7d, 24h, 30) or leave blank for lifetime", hw_id_lock="Lock to HWID (true/false)")
+async def create_user(interaction: discord.Interaction, username: str, password: str, expires_at: Optional[str] = None, hw_id_lock: bool = True):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel. Use `/select_app <app_id>` first or link this channel in the dashboard.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    parsed_expiry = parse_expiry(expires_at)
+    
+    payload = {
+        "username": username,
+        "password": password,
+        "expires_at": parsed_expiry,
+        "hwid_lock_enabled": hw_id_lock,
+    }
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    resp = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message(f"User **{username}** created successfully for application **{app['app_name']}**.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="list_users", description="List all users for the selected app")
+async def list_users(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch users.", ephemeral=True)
+        return
+    users = resp.json()
+    if not users:
+        await interaction.response.send_message("No users found for this app.", ephemeral=True)
+        return
+    embed = discord.Embed(title=f"Users for {app['app_name']}", color=0x00AAFF)
+    for user in users:
+        embed.add_field(
+            name=f"{user['username']} (ID: {user['id']})",
+            value=f"Status: {user['status']}\nHWID: {user['hwid'] or 'Not set'}\nExpires: {user['expires_at']}",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="delete_user", description="Delete a user from the selected app")
+@app_commands.describe(user_id="User ID from /list_users")
+async def delete_user(interaction: discord.Interaction, user_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users/{user_id}"
+    resp = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("User deleted successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="reset_user_hwid", description="Reset HWID for a user")
+@app_commands.describe(user_id="User ID from /list_users")
+async def reset_user_hwid(interaction: discord.Interaction, user_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users/{user_id}/reset-hwid"
+    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("User HWID reset successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="toggle_user_ban", description="Ban/unban a user")
+@app_commands.describe(user_id="User ID from /list_users")
+async def toggle_user_ban(interaction: discord.Interaction, user_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users/{user_id}/toggle-ban"
+    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("User ban status toggled successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="create_license", description="Generate licenses for the selected app")
+@app_commands.describe(amount="Number of licenses", duration_days="Duration in days (0 = lifetime)", expires_at="Duration (e.g. 7d, 24h, 30) or leave blank", hw_id_lock="Lock to HWID (true/false)")
+async def create_license(interaction: discord.Interaction, amount: int, duration_days: int = 0, expires_at: Optional[str] = None, hw_id_lock: bool = True):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel. Use `/select_app <app_id>` first or link this channel in the dashboard.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    parsed_expiry = parse_expiry(expires_at)
+    
+    payload = {
+        "amount": amount,
+        "duration_days": duration_days,
+        "expires_at": parsed_expiry,
+        "hwid_lock_enabled": hw_id_lock,
+    }
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses"
+    resp = requests.post(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        data = resp.json()
+        keys = "\n".join(data.get("keys", []))
+        await interaction.response.send_message(f"Generated {amount} license(s) for **{app['app_name']}**:\n\n{keys}\n", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="list_licenses", description="List all licenses for the selected app")
+async def list_licenses(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch licenses.", ephemeral=True)
+        return
+    licenses = resp.json()
+    if not licenses:
+        await interaction.response.send_message("No licenses found for this app.", ephemeral=True)
+        return
+    embed = discord.Embed(title=f"Licenses for {app['app_name']}", color=0xFFAA00)
+    for lic in licenses:
+        embed.add_field(
+            name=f"Key: {lic['license_key']} (ID: {lic['id']})",
+            value=f"Status: {lic['status']}\nHWID: {lic['hwid'] or 'Not set'}\nExpires: {lic['expires_at']}",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="delete_license", description="Delete a license from the selected app")
+@app_commands.describe(license_id="License ID from /list_licenses")
+async def delete_license(interaction: discord.Interaction, license_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses/{license_id}"
+    resp = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("License deleted successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="reset_license_hwid", description="Reset HWID for a license")
+@app_commands.describe(license_id="License ID from /list_licenses")
+async def reset_license_hwid(interaction: discord.Interaction, license_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses/{license_id}/reset-hwid"
+    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("License HWID reset successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="toggle_license_ban", description="Ban/unban a license")
+@app_commands.describe(license_id="License ID from /list_licenses")
+async def toggle_license_ban(interaction: discord.Interaction, license_id: int):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses/{license_id}/toggle-ban"
+    resp = requests.post(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("License ban status toggled successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="list_logs", description="List recent logs for the selected app")
+async def list_logs(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/logs"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch logs.", ephemeral=True)
+        return
+    logs = resp.json()
+    if not logs:
+        await interaction.response.send_message("No logs found for this app.", ephemeral=True)
+        return
+    embed = discord.Embed(title=f"Recent Logs for {app['app_name']}", color=0xFF00AA)
+    for log in logs:
+        embed.add_field(
+            name=log["action"],
+            value=f"{log['description']}\n{log['created_at']}",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# New help command
+@tree.command(name="help", description="Show available bot commands")
+async def help_cmd(interaction: discord.Interaction):
+    embed = discord.Embed(title="Help - Available Commands", color=0x00FFAA)
+    commands = [
+        ("/help", "Show this help message"),
+        ("/list_apps", "List your LegitAuth applications"),
+        ("/select_app", "Select an application to work with"),
+        ("/create_user", "Create a new user/password for the selected app"),
+        ("/list_users", "List all users for the selected app"),
+        ("/list_licenses", "List all licenses for the selected app"),
+        ("/stats", "Show statistics for the selected app"),
+        ("/app_info", "Show detailed information about the selected app"),
+        ("/search_user", "Search for a user by username"),
+        ("/search_key", "Search for a license key"),
+        ("/change_password", "Change password for a user"),
+        ("/active_users", "List active users"),
+        ("/banned_users", "List banned users"),
+        ("/clean_banned", "Remove all banned users and licenses"),
+        ("/give_cread", "Show Owner ID, Secret, and Name for an app"),
+        ("/register", "Register the current channel with an app")
+    ]
+    for name, desc in commands:
+        embed.add_field(name=name, value=desc, inline=False)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="stats", description="Show statistics for the selected app")
+async def stats(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    headers = api_headers_for_user(interaction.user.id)
+    
+    # Fetch users
+    users_url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    users_resp = requests.get(users_url, headers=headers)
+    
+    # Fetch licenses
+    lics_url = f"{API_BASE}/api/creator/apps/{app_id}/licenses"
+    lics_resp = requests.get(lics_url, headers=headers)
+    
+    if users_resp.status_code != 200 or lics_resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch app statistics.", ephemeral=True)
+        return
+        
+    users = users_resp.json()
+    licenses = lics_resp.json()
+    
+    total_users = len(users)
+    active_users_count = sum(1 for u in users if u.get("status") == "active")
+    banned_users_count = sum(1 for u in users if u.get("status") == "banned")
+    
+    total_lics = len(licenses)
+    active_lics_count = sum(1 for l in licenses if l.get("status") == "active")
+    banned_lics_count = sum(1 for l in licenses if l.get("status") == "banned")
+    unused_lics_count = sum(1 for l in licenses if not l.get("hwid") and l.get("status") == "active")
+    
+    embed = discord.Embed(title=f"📊 Statistics: {app['app_name']}", color=0x00FF88)
+    embed.add_field(name="App Status", value=f"• **Status:** {app.get('status', 'Unknown').capitalize()}\n• **Version:** {app.get('version', '1.0')}", inline=False)
+    embed.add_field(name="Users", value=f"• **Total:** {total_users}\n• **Active:** {active_users_count}\n• **Banned:** {banned_users_count}", inline=True)
+    embed.add_field(name="Licenses", value=f"• **Total:** {total_lics}\n• **Active:** {active_lics_count}\n• **Banned:** {banned_lics_count}\n• **Unused:** {unused_lics_count}", inline=True)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="app_info", description="Show detailed information about the selected app")
+async def app_info(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    embed = discord.Embed(title=f"ℹ️ App Info: {app['app_name']}", color=0x00AAFF)
+    embed.add_field(name="App ID", value=str(app['id']), inline=True)
+    embed.add_field(name="Status", value=app.get('status', 'active').capitalize(), inline=True)
+    embed.add_field(name="Version", value=app.get('version', '1.0'), inline=True)
+    embed.add_field(name="Dev Message", value=app.get('dev_message') or "None", inline=False)
+    embed.add_field(name="Webhook URL", value=app.get('webhook_url') or "None", inline=False)
+    
+    guild_name = app.get("discord_guild_name") or "Not Linked"
+    channel_name = app.get("discord_channel_name") or "Not Linked"
+    embed.add_field(name="Discord Link", value=f"Guild: {guild_name}\nChannel: {channel_name}", inline=False)
+    
+    log_status = "Enabled" if app.get("discord_log_enabled") else "Disabled"
+    welcome_status = "Enabled" if app.get("discord_welcome_enabled") else "Disabled"
+    embed.add_field(name="Bot Config", value=f"• Console Logs: {log_status}\n• Welcome System: {welcome_status}\n• Welcome MSG: {app.get('discord_welcome_msg') or 'None'}\n• DM Notifications: {'Enabled' if app.get('discord_dm_notifications') else 'Disabled'}", inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="search_user", description="Search for a user by username")
+@app_commands.describe(username="Username to search for")
+async def search_user(interaction: discord.Interaction, username: str):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch users list.", ephemeral=True)
+        return
+        
+    users = resp.json()
+    user = next((u for u in users if u['username'].lower() == username.lower()), None)
+    if not user:
+        await interaction.response.send_message(f"❌ User `{username}` not found.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title=f"👤 User Details: {user['username']}", color=0x00FF55)
+    embed.add_field(name="User ID", value=str(user['id']), inline=True)
+    embed.add_field(name="Status", value=user['status'].capitalize(), inline=True)
+    embed.add_field(name="Locked HWID", value=user.get('hwid') or "Not Set", inline=False)
+    embed.add_field(name="Last IP", value=user.get('last_ip') or "None", inline=True)
+    embed.add_field(name="Expires At", value=user.get('expires_at') or "Lifetime", inline=True)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="search_key", description="Search for a license key")
+@app_commands.describe(key="License key to search for")
+async def search_key(interaction: discord.Interaction, key: str):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/licenses"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch licenses list.", ephemeral=True)
+        return
+        
+    licenses = resp.json()
+    lic = next((l for l in licenses if l['license_key'].lower() == key.lower()), None)
+    if not lic:
+        await interaction.response.send_message(f"❌ License key `{key}` not found.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title=f"🔑 License Details", color=0xFFBB00)
+    embed.add_field(name="Key", value=f"`{lic['license_key']}`", inline=False)
+    embed.add_field(name="License ID", value=str(lic['id']), inline=True)
+    embed.add_field(name="Status", value=lic['status'].capitalize(), inline=True)
+    embed.add_field(name="Locked HWID", value=lic.get('hwid') or "Not Set", inline=False)
+    embed.add_field(name="Last IP", value=lic.get('last_ip') or "None", inline=True)
+    embed.add_field(name="Duration (Days)", value=str(lic.get('duration_days', 0)), inline=True)
+    embed.add_field(name="Expires At", value=lic.get('expires_at') or "Lifetime", inline=True)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="change_password", description="Change password for a user")
+@app_commands.describe(username="Username", new_password="New password")
+async def change_password(interaction: discord.Interaction, username: str, new_password: str):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+        
+    app_id = app["id"]
+    headers = api_headers_for_user(interaction.user.id)
+    
+    # Look up user by username to get ID
+    users_url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    users_resp = requests.get(users_url, headers=headers)
+    if users_resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch users list.", ephemeral=True)
+        return
+        
+    users = users_resp.json()
+    user = next((u for u in users if u['username'].lower() == username.lower()), None)
+    if not user:
+        await interaction.response.send_message(f"❌ User `{username}` not found.", ephemeral=True)
+        return
+        
+    # Update password
+    user_id = user['id']
+    pwd_url = f"{API_BASE}/api/creator/apps/{app_id}/users/{user_id}/password"
+    resp = requests.put(pwd_url, json={"new_password": new_password}, headers=headers)
+    if resp.status_code == 200:
+        await interaction.response.send_message(f"✅ Successfully updated password for user **{user['username']}**.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed to change password: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="active_users", description="List active users")
+async def active_users(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch users.", ephemeral=True)
+        return
+        
+    users = [u for u in resp.json() if u.get('status') == 'active']
+    if not users:
+        await interaction.response.send_message("No active users found for this app.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title=f"🟢 Active Users for {app['app_name']}", color=0x00FF55)
+    description = ""
+    for u in users[:25]:
+        description += f"• **{u['username']}** (Expires: {u.get('expires_at') or 'Lifetime'})\n"
+    if len(users) > 25:
+        description += f"\n*And {len(users) - 25} more...*"
+        
+    embed.description = description
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="banned_users", description="List banned users")
+async def banned_users(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+    
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/users"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch users.", ephemeral=True)
+        return
+        
+    users = [u for u in resp.json() if u.get('status') == 'banned']
+    if not users:
+        await interaction.response.send_message("No banned users found for this app.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title=f"🔴 Banned Users for {app['app_name']}", color=0xFF3333)
+    description = ""
+    for u in users[:25]:
+        description += f"• **{u['username']}** (Expires: {u.get('expires_at') or 'Lifetime'})\n"
+    if len(users) > 25:
+        description += f"\n*And {len(users) - 25} more...*"
+        
+    embed.description = description
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="clean_banned", description="Remove all banned users and licenses")
+async def clean_banned(interaction: discord.Interaction):
+    app = get_current_app(interaction)
+    if not app:
+        await interaction.response.send_message("No app selected or linked to this channel.", ephemeral=True)
+        return
+        
+    app_id = app["id"]
+    url = f"{API_BASE}/api/creator/apps/{app_id}/clean-banned"
+    resp = requests.delete(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        data = resp.json()
+        await interaction.response.send_message(f"✅ Cleaned banned users and licenses successfully!\n• Users Deleted: {data.get('users_deleted', 0)}\n• Licenses Deleted: {data.get('licenses_deleted', 0)}", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Failed to clean banned: {resp.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="give_cread", description="Show Owner ID, Secret, and Name for an app")
+@app_commands.describe(app_identifier="App Name or App ID (optional)")
+async def give_cread(interaction: discord.Interaction, app_identifier: Optional[str] = None):
+    url = f"{API_BASE}/api/creator/apps"
+    resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch apps list.", ephemeral=True)
+        return
+        
+    apps = resp.json()
+    selected_app = None
+    
+    if app_identifier:
+        if app_identifier.isdigit():
+            selected_app = next((a for a in apps if a['id'] == int(app_identifier)), None)
+        if not selected_app:
+            selected_app = next((a for a in apps if a['app_name'].lower() == app_identifier.lower()), None)
+    else:
+        current = get_current_app(interaction)
+        if current:
+            selected_app = next((a for a in apps if a['id'] == current['id']), None)
+            
+    if not selected_app:
+        await interaction.response.send_message("❌ Application not found. Please provide a valid app ID or name.", ephemeral=True)
+        return
+        
+    embed = discord.Embed(title="🔐 App Credentials (LegitAuth)", color=0x00FFAA)
+    embed.add_field(name="App Name", value=selected_app['app_name'], inline=True)
+    embed.add_field(name="App ID", value=str(selected_app['id']), inline=True)
+    embed.add_field(name="Owner ID (UUID)", value=f"`{selected_app['owner_id']}`", inline=False)
+    embed.add_field(name="App Secret", value=f"`{selected_app['secret']}`", inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@tree.command(name="register", description="Register the current channel with an app")
+async def register(interaction: discord.Interaction, app_id: int):
+    # Register this channel to the app for future commands
+    url = f"{API_BASE}/api/creator/apps/{app_id}/discord"
+    payload = {"discord_channel_id": str(interaction.channel_id)}
+    resp = requests.put(url, json=payload, headers=api_headers_for_user(interaction.user.id))
+    if resp.status_code == 200:
+        await interaction.response.send_message("Channel registered successfully.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ Registration failed: {resp.json().get('detail', 'unknown error')}",
+                                              ephemeral=True)
+
+# Welcome new members handler
+@client.event
+async def on_member_join(member: discord.Member):
+    """Welcome new members if enabled in the app configuration."""
+    try:
+        url = f"{API_BASE}/api/creator/discord/app-by-guild/{member.guild.id}"
+        resp = requests.get(url, headers=api_headers())
+        if resp.status_code == 200:
+            app = resp.json()
+            if app.get("discord_welcome_enabled"):
+                # Send welcome message
+                channel_id = app.get("discord_welcome_channel_id")
+                if channel_id:
+                    channel = member.guild.get_channel(int(channel_id))
+                    if channel:
+                        await channel.send(app.get("discord_welcome_msg", "Welcome to the server!"))
+                # Assign role
+                role_id = app.get("discord_role_on_register")
+                if role_id:
+                    role = member.guild.get_role(int(role_id))
+                    if role:
+                        await member.add_roles(role)
+    except Exception as e:
+        print(f"Error in welcome handler: {e}")
+
+@client.event
+async def on_ready():
+    await tree.sync()
+    print(f"Logged in as {client.user}")
+
+# Bot token should be stored in .env as DISCORD_BOT_TOKEN
+if __name__ == "__main__":
+    client.run(os.getenv("DISCORD_BOT_TOKEN"))
