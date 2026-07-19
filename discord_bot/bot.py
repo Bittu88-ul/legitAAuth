@@ -886,6 +886,46 @@ async def user_list(interaction: discord.Interaction, app: Optional[str] = None)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+# --- Global Interaction Check & Permission Handling ---
+@tree.interaction_check
+async def check_permissions(interaction: discord.Interaction) -> bool:
+    # Always allow basic config and help commands to prevent lockout
+    if interaction.command and interaction.command.name in ("link_token", "unlink_token", "register", "select_app", "help"):
+        return True
+        
+    # Server administrators and guild owners bypass all role restrictions
+    if isinstance(interaction.user, discord.Member):
+        if interaction.user.guild_permissions.administrator or (interaction.guild and interaction.user.id == interaction.guild.owner_id):
+            return True
+            
+    user_id = interaction.user.id
+    channel_id = interaction.channel_id
+    
+    # Resolve linked or selected application to read configured roles
+    app = get_linked_app(channel_id, user_id)
+    if not app:
+        app = user_selected_app.get(user_id)
+        
+    if app:
+        allowed_roles_str = app.get("discord_allowed_roles")
+        if allowed_roles_str:
+            allowed_roles = [r.strip() for r in allowed_roles_str.split(",") if r.strip()]
+            if allowed_roles:
+                if not isinstance(interaction.user, discord.Member):
+                    return False
+                member_role_ids = [str(role.id) for role in interaction.user.roles]
+                if not any(rid in allowed_roles for rid in member_role_ids):
+                    return False
+    return True
+
+@tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        # Silence unauthorized role check failures completely (no response)
+        return
+    print(f"Slash command error: {error}")
+
+
 # --- Register Groups inside CommandTree ---
 tree.add_command(app_group)
 tree.add_command(license_group)
