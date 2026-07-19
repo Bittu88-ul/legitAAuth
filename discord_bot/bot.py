@@ -165,16 +165,21 @@ async def global_interaction_check(interaction: discord.Interaction) -> bool:
             if not chan_id or str(interaction.channel_id) != str(chan_id):
                 return False  # Ignore silently
                 
-            # Check 3: Allowed Roles check
+            # Check 3: Allowed Roles check (Must be configured, and user must have the allowed role)
             allowed_roles_str = app.get("discord_allowed_roles")
-            if allowed_roles_str:
-                allowed_roles = [r.strip() for r in allowed_roles_str.split(",") if r.strip()]
-                if allowed_roles:
-                    if not isinstance(interaction.user, discord.Member):
-                        return False
-                    user_role_ids = [str(r.id) for r in interaction.user.roles]
-                    if not any(r_id in user_role_ids for r_id in allowed_roles):
-                        return False  # Ignore silently
+            if not allowed_roles_str:
+                return False  # Ignore silently if no allowed roles are set
+                
+            allowed_roles = [r.strip() for r in allowed_roles_str.split(",") if r.strip()]
+            if not allowed_roles:
+                return False  # Ignore silently if list is empty
+                
+            if not isinstance(interaction.user, discord.Member):
+                return False
+                
+            user_role_ids = [str(r.id) for r in interaction.user.roles]
+            if not any(r_id in user_role_ids for r_id in allowed_roles):
+                return False  # Ignore silently
         else:
             # If guild is not linked (404) or API error, ignore all commands silently (except link/unlink token)
             return False
