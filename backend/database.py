@@ -35,6 +35,24 @@ class Creator(Base):
     discord_token_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Discord Config fields on Creator
+    discord_guild_id = Column(String, nullable=True)
+    discord_channel_id = Column(String, nullable=True)
+    discord_guild_name = Column(String, nullable=True)
+    discord_channel_name = Column(String, nullable=True)
+    discord_role_id = Column(String, nullable=True)
+    discord_role_name = Column(String, nullable=True)
+    discord_log_enabled = Column(Boolean, default=False)
+    discord_welcome_enabled = Column(Boolean, default=False)
+    discord_welcome_msg = Column(String, default="Welcome to the Server!")
+    discord_role_on_register = Column(String, nullable=True)
+    discord_dm_notifications = Column(Boolean, default=True)
+    
+    # Premium features
+    discord_member_reset_enabled = Column(Boolean, default=False)
+    discord_login_log_enabled = Column(Boolean, default=False)
+    discord_embed_color = Column(String, default="#00FFAA")
+
     # Relationships
     applications = relationship("Application", back_populates="creator", cascade="all, delete-orphan")
     otps = relationship("OTP", back_populates="creator", cascade="all, delete-orphan")
@@ -213,6 +231,27 @@ def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE creators ADD COLUMN discord_token_expires_at DATETIME"))
+    except Exception:
+        pass
+
+    # Add Discord configuration columns to creators table
+    for field in ["discord_guild_id", "discord_channel_id", "discord_guild_name", "discord_channel_name", "discord_role_id", "discord_role_name", "discord_role_on_register", "discord_welcome_msg", "discord_embed_color"]:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE creators ADD COLUMN {field} VARCHAR"))
+        except Exception:
+            pass
+            
+    for field in ["discord_log_enabled", "discord_welcome_enabled", "discord_member_reset_enabled", "discord_login_log_enabled"]:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE creators ADD COLUMN {field} BOOLEAN DEFAULT 0"))
+        except Exception:
+            pass
+            
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT 1"))
     except Exception:
         pass
 

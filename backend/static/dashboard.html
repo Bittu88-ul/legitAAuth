@@ -87,10 +87,15 @@
                 </div>
 
                 <h2 style="margin-top: 30px;">Your Applications</h2>
-                <div style="display:flex; gap:10px;">
-                    <input type="text" id="new-app-name" placeholder="App Name" style="width: 300px;">
-                    <button onclick="createApp()" style="width: 150px; margin-top: 10px;"><i class="fas fa-plus"></i> Create App</button>
+                <div class="create-app-container" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px; margin-top: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);">
+                    <h3 style="margin-bottom: 12px; color: white;"><i class="fas fa-plus-circle" style="color: var(--primary); margin-right: 8px;"></i>Create New Application</h3>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="new-app-name" placeholder="Enter application name (e.g., Vanguard Loader)" style="flex: 1; min-width: 250px; margin: 0;">
+                        <button onclick="createApp()" style="width: auto; padding: 14px 28px; margin: 0; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);"><i class="fas fa-plus"></i> Create App</button>
+                    </div>
                 </div>
+
+                <h2 style="margin-top: 40px; margin-bottom: 15px; font-weight: 600; color: white; display: flex; align-items: center; gap: 10px;"><i class="fas fa-cubes" style="color: var(--primary);"></i> Your Applications</h2>
                 <div id="app-list"></div>
             </div>
 
@@ -258,7 +263,7 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
             </div>
             <div id="discord-tab" class="tab-content" style="display:none;">
                 <h2><i class="fab fa-discord" style="color: #5865F2; margin-right: 10px;"></i>Discord Bot Integration</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Manage LegitAuth applications directly inside your Discord server.</p>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Manage all of your LegitAuth applications simultaneously inside your Discord server.</p>
 
                 <!-- Discord Link Status -->
                 <div id="discord-link-section" style="background: rgba(0,0,0,0.3); padding: 25px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:20px;">
@@ -271,13 +276,6 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                         <p style="color: var(--text-muted); margin-bottom:15px;">Discord Account Linked: <strong id="discord-user-tag" style="color: var(--success);"></strong></p>
                         <button onclick="loadDiscordGuilds()" style="width:auto; padding:8px 16px; margin-right:10px; background: var(--primary);"><i class="fas fa-sync"></i> Refresh Servers</button>
                     </div>
-                </div>
-                
-                <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                    <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-layer-group" style="margin-right: 8px;"></i>1. Select Application</h3>
-                    <select id="discord-app-selector" onchange="switchDiscordApp(this.value)" style="padding: 10px; width: 100%; max-width: 400px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        <option value="">-- Select an App to Integrate --</option>
-                    </select>
                 </div>
 
                 <div id="discord-integration-details" style="display:none;">
@@ -292,7 +290,7 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
 
                     <!-- Setup Form -->
                     <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>2. Link Discord Server & Channel</h3>
+                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>1. Link Discord Server & Channel</h3>
                         
                         <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
                         <div style="display:flex; gap:10px; margin-bottom:20px;">
@@ -313,11 +311,6 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                             <option value="">-- Choose Channel --</option>
                         </select>
 
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Section (Category)</label>
-                        <select id="discord-section-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                            <option value="">-- Choose Section --</option>
-                        </select>
-
                         <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Required Role for Commands</label>
                         <select id="discord-role-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
                             <option value="">-- Choose Role --</option>
@@ -331,7 +324,7 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
 
                     <!-- Bot Features Configuration Form -->
                     <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px; margin-top: 20px;">
-                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>3. Bot Feature Configurations</h3>
+                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>2. Bot Feature Configurations</h3>
                         
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
                             <div>
@@ -339,6 +332,31 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                                 <span style="color: var(--text-muted); font-size: 12px;">Sends log events (registers, claims, resets) directly to the linked Discord channel.</span>
                             </div>
                             <input type="checkbox" id="discord-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <div>
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Log Client Logins to Channel</label>
+                                <span style="color: var(--text-muted); font-size: 12px;">Sends a real-time login alert (IP, App) to your selected Discord channel.</span>
+                            </div>
+                            <input type="checkbox" id="discord-login-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <div>
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Customer HWID Self-Reset</label>
+                                <span style="color: var(--text-muted); font-size: 12px;">Allows customers to reset their own HWID using `/hwid_reset` or `/license_reset`.</span>
+                            </div>
+                            <input type="checkbox" id="discord-member-reset-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+                        </div>
+
+                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <label style="color: white; font-size: 14px; font-weight: bold; display: block; margin-bottom: 8px;">Bot Embed Theme Color</label>
+                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Select or type a color for the bot's embed messages.</span>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="color" id="discord-embed-color-picker" oninput="document.getElementById('discord-embed-color').value = this.value" style="width: 50px; height: 40px; border: none; padding: 0; background: transparent; cursor: pointer; border-radius: 8px;">
+                                <input type="text" id="discord-embed-color" placeholder="#00FFAA" style="margin: 0; flex: 1; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);" oninput="document.getElementById('discord-embed-color-picker').value = this.value">
+                            </div>
                         </div>
 
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">

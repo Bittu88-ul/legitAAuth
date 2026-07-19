@@ -93,33 +93,84 @@ def api_headers_for_user(user_id: int):
 def api_headers():
     return {"Authorization": f"Bearer {DEFAULT_API_TOKEN}"}
 
-def get_linked_app(channel_id: int, category_id: Optional[int], user_id: int):
-    # 1. Check by channel_id
-    url = f"{API_BASE}/api/creator/discord/app-by-channel/{channel_id}"
+def get_embed_color(app: Optional[dict] = None) -> int:
+    color_str = "#00FFAA"
+    if app and app.get("discord_embed_color"):
+        color_str = app.get("discord_embed_color")
     try:
-        resp = requests.get(url, headers=api_headers_for_user(user_id))
-        if resp.status_code == 200:
-            return resp.json()
+        color_str = color_str.replace("#", "")
+        return int(color_str, 16)
     except Exception:
-        pass
+        return 0x00FFAA
 
-    # 2. Check by category_id (section)
-    if category_id:
-        url = f"{API_BASE}/api/creator/discord/app-by-section/{category_id}"
+def get_current_app(interaction: discord.Interaction):
+    # 1. Check user session selection
+    app = user_selected_app.get(interaction.user.id)
+    if app:
+        return app
+        
+    # 2. Check by guild ID (if in server)
+    if interaction.guild_id:
+        url = f"{API_BASE}/api/creator/discord/app-by-guild/{interaction.guild_id}"
         try:
-            resp = requests.get(url, headers=api_headers_for_user(user_id))
+            resp = requests.get(url, headers=api_headers())
             if resp.status_code == 200:
                 return resp.json()
         except Exception:
             pass
+            
+    # 3. Fallback: check creator's apps (if exactly one app, auto-select it)
+    try:
+        url = f"{API_BASE}/api/creator/apps"
+        resp = requests.get(url, headers=api_headers_for_user(interaction.user.id))
+        if resp.status_code == 200:
+            apps = resp.json()
+            if len(apps) == 1:
+                user_selected_app[interaction.user.id] = apps[0]
+                return apps[0]
+    except Exception:
+        pass
+        
     return None
 
-def get_current_app(interaction: discord.Interaction):
-    app = user_selected_app.get(interaction.user.id)
-    if not app:
-        category_id = getattr(interaction.channel, "category_id", None)
-        app = get_linked_app(interaction.channel_id, category_id, interaction.user.id)
-    return app
+@tree.interaction_check
+async def global_interaction_check(interaction: discord.Interaction) -> bool:
+    # Setup / system linking commands are bypassed
+    bypass_commands = ["link_token", "unlink_token"]
+    if interaction.command and interaction.command.name in bypass_commands:
+        return True
+        
+    if not interaction.guild_id:
+        # In DMs, allow commands to run
+        return True
+        
+    # Query app/creator settings by guild id
+    url = f"{API_BASE}/api/creator/discord/app-by-guild/{interaction.guild_id}"
+    try:
+        resp = requests.get(url, headers=api_headers())
+        if resp.status_code == 200:
+            app = resp.json()
+            chan_id = app.get("discord_channel_id")
+            role_id = app.get("discord_role_id")
+            
+            # Channel restriction check
+            if chan_id and str(interaction.channel_id) != str(chan_id):
+                await interaction.response.send_message("❌ This bot is restricted to a specific channel and cannot reply here.", ephemeral=True)
+                return False
+                
+            # Role restriction check
+            if role_id:
+                if not isinstance(interaction.user, discord.Member):
+                    await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+                    return False
+                user_role_ids = [str(r.id) for r in interaction.user.roles]
+                if str(role_id) not in user_role_ids:
+                    await interaction.response.send_message("❌ You do not have the required role to use this bot.", ephemeral=True)
+                    return False
+    except Exception as e:
+        print(f"Error during global checks: {e}")
+        
+    return True
 
 def validate_bot_access(interaction: discord.Interaction, app: dict) -> tuple[bool, str]:
     # Check channel/section restriction
@@ -738,7 +789,7 @@ async def give_cread(interaction: discord.Interaction, app_identifier: Optional[
         await interaction.response.send_message("❌ Application not found. Please provide a valid app ID or name.", ephemeral=True)
         return
         
-    embed = discord.Embed(title="🔐 App Credentials (LegitAuth)", color=0x00FFAA)
+    embed = discord.Embed(title="🔐 App Credentials (LegitAuth)", color=get_embed_color(selected_app))
     embed.add_field(name="App Name", value=selected_app['app_name'], inline=True)
     embed.add_field(name="App ID", value=str(selected_app['id']), inline=True)
     embed.add_field(name="Owner ID (UUID)", value=f"`{selected_app['owner_id']}`", inline=False)
@@ -746,17 +797,75 @@ async def give_cread(interaction: discord.Interaction, app_identifier: Optional[
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@tree.command(name="register", description="Register the current channel with an app")
-async def register(interaction: discord.Interaction, app_id: int):
-    # Register this channel to the app for future commands
-    url = f"{API_BASE}/api/creator/apps/{app_id}/discord"
-    payload = {"discord_channel_id": str(interaction.channel_id)}
-    resp = requests.put(url, json=payload, headers=api_headers_for_user(interaction.user.id))
-    if resp.status_code == 200:
-        await interaction.response.send_message("Channel registered successfully.", ephemeral=True)
+@tree.command(name="register", description="Register this channel to receive logs and listen to commands")
+async def register(interaction: discord.Interaction):
+    token = user_tokens.get(str(interaction.user.id))
+    if not token:
+        await interaction.response.send_message("❌ Please link your LegitAuth API token first using `/link_token`.", ephemeral=True)
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers={"Authorization": f"Bearer {token}"})
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch Discord configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    config["discord_channel_id"] = str(interaction.channel_id)
+    config["discord_channel_name"] = interaction.channel.name
+    config["discord_guild_id"] = str(interaction.guild_id)
+    config["discord_guild_name"] = interaction.guild.name
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers={"Authorization": f"Bearer {token}"})
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ This channel has been successfully registered to listen to bot commands and receive logs.", ephemeral=True)
     else:
-        await interaction.response.send_message(f"❌ Registration failed: {resp.json().get('detail', 'unknown error')}",
-                                              ephemeral=True)
+        await interaction.response.send_message(f"❌ Failed to register channel: {resp_put.json().get('detail', 'unknown error')}", ephemeral=True)
+
+@tree.command(name="hwid_reset", description="Reset your own user credentials HWID (if allowed by administrator)")
+@app_commands.describe(username="Your username", password="Your password", app_id="Target application ID (optional)")
+async def hwid_reset(interaction: discord.Interaction, username: str, password: str, app_id: Optional[int] = None):
+    payload = {
+        "username": username,
+        "password": password,
+        "app_id": app_id
+    }
+    url = f"{API_BASE}/api/creator/discord/reset-member-hwid"
+    resp = requests.post(url, json=payload)
+    if resp.status_code == 200:
+        app = get_current_app(interaction)
+        embed = discord.Embed(
+            title="🔄 HWID Reset Successful",
+            description=f"Your HWID has been successfully reset. You can now login on your new machine.",
+            color=get_embed_color(app)
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    else:
+        err = resp.json().get("detail", "Failed to reset HWID. Please check credentials or contact administrator.")
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+
+@tree.command(name="license_reset", description="Reset your license key HWID (if allowed by administrator)")
+@app_commands.describe(license_key="Your license key", app_id="Target application ID (optional)")
+async def license_reset(interaction: discord.Interaction, license_key: str, app_id: Optional[int] = None):
+    payload = {
+        "license_key": license_key,
+        "app_id": app_id
+    }
+    url = f"{API_BASE}/api/creator/discord/reset-member-license"
+    resp = requests.post(url, json=payload)
+    if resp.status_code == 200:
+        app = get_current_app(interaction)
+        embed = discord.Embed(
+            title="🔄 HWID Reset Successful",
+            description=f"Your license key **{license_key}** HWID has been successfully reset. You can now login.",
+            color=get_embed_color(app)
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    else:
+        err = resp.json().get("detail", "Failed to reset HWID. Please check key or contact administrator.")
+        await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+
 
 # Welcome new members handler
 @client.event
