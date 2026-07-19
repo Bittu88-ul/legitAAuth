@@ -97,52 +97,77 @@ function submitLogout() {
     }
 }
 
-function showDashboard() {
+async function showDashboard() {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('dashboard-container').style.display = 'flex';
     
     const role = localStorage.getItem('user_role') || 'creator';
+    const token = localStorage.getItem('token');
     
-    // Update Settings Profile Email & Token dynamically
-    const email = localStorage.getItem('email') || 'Unknown';
-    const emailSpan = document.getElementById('profile-email');
-    if (emailSpan) {
-        emailSpan.innerText = email;
-    }
+    // Update Settings Profile Token dynamically
     const tokenInput = document.getElementById('profile-api-token');
     if (tokenInput) {
-        tokenInput.value = localStorage.getItem('token') || '';
+        tokenInput.value = token || '';
     }
+    
+    // Fetch and populate creator profile details
+    if (token) {
+        try {
+            const profileRes = await fetch('/api/creator/profile', {
+                headers: {'Authorization': `Bearer ${token}`}
+            });
+            if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                const emailSpan = document.getElementById('profile-email');
+                if (emailSpan) emailSpan.innerText = profileData.email || 'Unknown';
+                
+                const nameInput = document.getElementById('profile-full-name');
+                if (nameInput) nameInput.value = profileData.full_name || '';
+            }
+        } catch(e) {
+            console.error('Failed to load profile details', e);
+        }
+    }
+    
+    loadSystemDefaults();
     
     if (role === 'reseller') {
         const navResellers = document.getElementById('nav-resellers');
         if (navResellers) navResellers.style.display = 'none';
         
-        const createAppContainer = document.querySelector('.create-app-container');
+        const createAppContainer = document.querySelector('.create-app-card');
         if (createAppContainer) createAppContainer.style.display = 'none';
         
         // Hide API Token UI for resellers as it belongs to the parent creator
-        const tokenParent = tokenInput ? tokenInput.parentElement : null;
-        if (tokenParent) {
-            tokenParent.style.display = 'none';
-            if (tokenParent.previousElementSibling) {
-                tokenParent.previousElementSibling.style.display = 'none';
-            }
-        }
+        const devTokenSec = document.querySelector('.dev-token-section');
+        if (devTokenSec) devTokenSec.style.display = 'none';
+        
+        // Hide Settings sub-tabs not accessible to resellers
+        const defaultsTabBtn = document.getElementById('btn-settings-defaults');
+        if (defaultsTabBtn) defaultsTabBtn.style.display = 'none';
+        const discordTabBtn = document.getElementById('btn-settings-discord');
+        if (discordTabBtn) discordTabBtn.style.display = 'none';
+        
+        // Default Settings view for resellers
+        switchSettingsSubTab('settings-profile');
     } else {
         const navResellers = document.getElementById('nav-resellers');
         if (navResellers) navResellers.style.display = 'block';
         
-        const createAppContainer = document.querySelector('.create-app-container');
+        const createAppContainer = document.querySelector('.create-app-card');
         if (createAppContainer) createAppContainer.style.display = 'block';
         
-        const tokenParent = tokenInput ? tokenInput.parentElement : null;
-        if (tokenParent) {
-            tokenParent.style.display = 'flex';
-            if (tokenParent.previousElementSibling) {
-                tokenParent.previousElementSibling.style.display = 'block';
-            }
-        }
+        const devTokenSec = document.querySelector('.dev-token-section');
+        if (devTokenSec) devTokenSec.style.display = 'block';
+        
+        // Show Settings sub-tabs for creators
+        const defaultsTabBtn = document.getElementById('btn-settings-defaults');
+        if (defaultsTabBtn) defaultsTabBtn.style.display = 'block';
+        const discordTabBtn = document.getElementById('btn-settings-discord');
+        if (discordTabBtn) discordTabBtn.style.display = 'block';
+        
+        // Check Discord link status and configurations
+        checkDiscordLink();
     }
     
     loadApps();
@@ -259,8 +284,33 @@ async function createApp() {
             body: JSON.stringify({app_name})
         });
         if (res.ok) {
+            const data = await res.json();
             document.getElementById('new-app-name').value = '';
             showToast('Application created successfully!', 'success');
+            
+            // Auto initialize with default settings
+            const defaultStatus = localStorage.getItem('default_app_status') || 'active';
+            const defaultVersion = localStorage.getItem('default_app_version') || '1.0';
+            const defaultMotd = localStorage.getItem('default_app_motd') || 'Welcome to our application!';
+            
+            try {
+                await fetch(`${API_URL}/apps/${data.app.id}/settings`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        status: defaultStatus,
+                        version: defaultVersion,
+                        dev_message: defaultMotd,
+                        webhook_url: ''
+                    })
+                });
+            } catch(settingsErr) {
+                console.error('Failed to initialize defaults', settingsErr);
+            }
+            
             loadApps();
         } else {
             const data = await res.json();
@@ -1264,11 +1314,15 @@ async function loadResellers() {
             }).join(', ') || 'None';
             
             const perms = [];
+            if (r.is_admin) perms.push('👑 Admin');
             if (r.can_view_secret) perms.push('View Secret');
             if (r.can_manage_users) perms.push('Manage Users');
             if (r.can_manage_licenses) perms.push('Manage Licenses');
             if (r.can_reset_hwid) perms.push('HWID Reset');
             if (r.can_view_logs) perms.push('View Logs');
+            if (r.can_ban_users) perms.push('Ban Users');
+            if (r.can_clean_banned) perms.push('Clean Banned');
+            if (r.can_modify_app_settings) perms.push('Edit App Settings');
             const permText = perms.join(', ') || 'No Permissions';
             
             const dateStr = new Date(r.created_at).toLocaleDateString();
@@ -1280,7 +1334,7 @@ async function loadResellers() {
                     <td style="color: var(--primary); font-size: 13px;">${permText}</td>
                     <td>${dateStr}</td>
                     <td>
-                        <button class="action-btn icon-btn" onclick="editReseller(${r.id}, '${r.username}', [${r.allowed_apps.join(',')}], ${r.can_view_secret}, ${r.can_manage_users}, ${r.can_manage_licenses}, ${r.can_reset_hwid}, ${r.can_view_logs})" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="action-btn icon-btn" onclick="editReseller(${r.id}, '${r.username}', [${r.allowed_apps.join(',')}], ${r.is_admin}, ${r.can_view_secret}, ${r.can_manage_users}, ${r.can_manage_licenses}, ${r.can_reset_hwid}, ${r.can_view_logs}, ${r.can_ban_users}, ${r.can_clean_banned}, ${r.can_modify_app_settings})" title="Edit"><i class="fas fa-edit"></i></button>
                         <button class="action-btn icon-btn danger-btn" onclick="deleteReseller(${r.id})" title="Delete"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
@@ -1337,11 +1391,15 @@ async function saveReseller() {
         username: username,
         password: password || null,
         allowed_apps: allowedApps,
+        is_admin: document.getElementById('perm-is-admin').checked,
         can_view_secret: document.getElementById('perm-view-secret').checked,
         can_manage_users: document.getElementById('perm-manage-users').checked,
         can_manage_licenses: document.getElementById('perm-manage-licenses').checked,
         can_reset_hwid: document.getElementById('perm-reset-hwid').checked,
-        can_view_logs: document.getElementById('perm-view-logs').checked
+        can_view_logs: document.getElementById('perm-view-logs').checked,
+        can_ban_users: document.getElementById('perm-ban-users').checked,
+        can_clean_banned: document.getElementById('perm-clean-banned').checked,
+        can_modify_app_settings: document.getElementById('perm-modify-app-settings').checked
     };
     
     const token = localStorage.getItem('token');
@@ -1371,7 +1429,7 @@ async function saveReseller() {
     }
 }
 
-function editReseller(id, username, allowedApps, viewSecret, manageUsers, manageLicenses, resetHwid, viewLogs) {
+function editReseller(id, username, allowedApps, isAdmin, viewSecret, manageUsers, manageLicenses, resetHwid, viewLogs, banUsers, cleanBanned, modifyAppSettings) {
     document.getElementById('edit-reseller-id').value = id;
     
     const nameInput = document.getElementById('reseller-form-username');
@@ -1385,11 +1443,22 @@ function editReseller(id, username, allowedApps, viewSecret, manageUsers, manage
         cb.checked = allowedApps.includes(parseInt(cb.value));
     });
     
+    const adminCb = document.getElementById('perm-is-admin');
+    if (adminCb) {
+        adminCb.checked = isAdmin;
+        toggleResellerAdminState(isAdmin);
+    }
+    
     document.getElementById('perm-view-secret').checked = viewSecret;
     document.getElementById('perm-manage-users').checked = manageUsers;
     document.getElementById('perm-manage-licenses').checked = manageLicenses;
     document.getElementById('perm-reset-hwid').checked = resetHwid;
     document.getElementById('perm-view-logs').checked = viewLogs;
+    document.getElementById('perm-ban-users').checked = banUsers;
+    document.getElementById('perm-clean-banned').checked = cleanBanned;
+    document.getElementById('perm-modify-app-settings').checked = modifyAppSettings;
+    
+    switchResellersSubTab('resellers-create-panel');
     
     document.getElementById('reseller-form-title').innerHTML = `<i class="fas fa-user-edit" style="color: var(--primary); margin-right: 8px;"></i>Edit Reseller Profile (${username})`;
     document.getElementById('btn-cancel-reseller-edit').style.display = 'inline-block';
@@ -1429,12 +1498,143 @@ function clearResellerForm() {
     
     document.querySelectorAll('input[name="reseller-apps"]').forEach(cb => cb.checked = false);
     
+    const adminCb = document.getElementById('perm-is-admin');
+    if (adminCb) {
+        adminCb.checked = false;
+        toggleResellerAdminState(false);
+    }
+    
     document.getElementById('perm-view-secret').checked = false;
     document.getElementById('perm-manage-users').checked = false;
     document.getElementById('perm-manage-licenses').checked = false;
     document.getElementById('perm-reset-hwid').checked = false;
     document.getElementById('perm-view-logs').checked = false;
+    document.getElementById('perm-ban-users').checked = false;
+    document.getElementById('perm-clean-banned').checked = false;
+    document.getElementById('perm-modify-app-settings').checked = false;
     
     document.getElementById('reseller-form-title').innerHTML = '<i class="fas fa-user-plus" style="color: var(--primary); margin-right: 8px;"></i>Create New Reseller Profile';
     document.getElementById('btn-cancel-reseller-edit').style.display = 'none';
+}
+
+/* Sub-tabs logic for Settings & Resellers */
+function switchSettingsSubTab(subTabId) {
+    document.querySelectorAll('.settings-sub-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#settings-tab .sub-tab-btn').forEach(btn => btn.classList.remove('active'));
+    
+    const target = document.getElementById(subTabId);
+    if (target) target.style.display = 'block';
+    
+    const activeBtn = document.getElementById(`btn-${subTabId}`);
+    if (activeBtn) activeBtn.classList.add('active');
+}
+
+function switchResellersSubTab(subTabId) {
+    document.querySelectorAll('.reseller-sub-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('#resellers-tab .sub-tab-btn').forEach(btn => btn.classList.remove('active'));
+    
+    const target = document.getElementById(subTabId);
+    if (target) target.style.display = 'block';
+    
+    const activeBtn = document.getElementById(`btn-${subTabId.replace('-panel', '')}`);
+    if (activeBtn) activeBtn.classList.add('active');
+}
+
+function toggleResellerAdminState(checked) {
+    const list = [
+        'perm-view-secret',
+        'perm-manage-users',
+        'perm-manage-licenses',
+        'perm-reset-hwid',
+        'perm-view-logs',
+        'perm-ban-users',
+        'perm-clean-banned',
+        'perm-modify-app-settings'
+    ];
+    list.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (checked) {
+                el.checked = true;
+                el.disabled = true;
+            } else {
+                el.disabled = false;
+            }
+        }
+    });
+}
+
+async function saveCreatorProfile() {
+    const fullName = document.getElementById('profile-full-name').value.trim();
+    const newPassword = document.getElementById('profile-new-password').value;
+    const token = localStorage.getItem('token');
+    
+    const payload = {};
+    if (fullName) payload.full_name = fullName;
+    if (newPassword) payload.password = newPassword;
+    
+    try {
+        const res = await fetch('/api/creator/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            showToast('Profile updated successfully!', 'success');
+            document.getElementById('profile-new-password').value = '';
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Failed to update profile', 'error');
+        }
+    } catch (e) {
+        showToast('Error communicating with server', 'error');
+    }
+}
+
+function saveSystemDefaults() {
+    const status = document.getElementById('default-app-status').value;
+    const version = document.getElementById('default-app-version').value.trim();
+    const motd = document.getElementById('default-app-motd').value.trim();
+    const hwid = document.getElementById('default-app-hwid').value;
+    
+    localStorage.setItem('default_app_status', status);
+    localStorage.setItem('default_app_version', version);
+    localStorage.setItem('default_app_motd', motd);
+    localStorage.setItem('default_app_hwid', hwid);
+    
+    showToast('Application defaults saved!', 'success');
+}
+
+function loadSystemDefaults() {
+    const status = localStorage.getItem('default_app_status') || 'active';
+    const version = localStorage.getItem('default_app_version') || '1.0';
+    const motd = localStorage.getItem('default_app_motd') || 'Welcome to our application!';
+    const hwid = localStorage.getItem('default_app_hwid') || 'true';
+    
+    const statusEl = document.getElementById('default-app-status');
+    const versionEl = document.getElementById('default-app-version');
+    const motdEl = document.getElementById('default-app-motd');
+    const hwidEl = document.getElementById('default-app-hwid');
+    
+    if (statusEl) statusEl.value = status;
+    if (versionEl) versionEl.value = version;
+    if (motdEl) motdEl.value = motd;
+    if (hwidEl) hwidEl.value = hwid;
+}
+
+function toggleTokenVisibility() {
+    const tokenInput = document.getElementById('profile-api-token');
+    const icon = document.getElementById('token-eye-icon');
+    if (tokenInput && icon) {
+        if (tokenInput.type === 'password') {
+            tokenInput.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            tokenInput.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
 }

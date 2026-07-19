@@ -159,11 +159,15 @@ class Reseller(Base):
     allowed_apps = Column(String, nullable=True) # Comma-separated string of app IDs
     
     # Permissions
+    is_admin = Column(Boolean, default=False)
     can_view_secret = Column(Boolean, default=False)
     can_manage_users = Column(Boolean, default=False)
     can_manage_licenses = Column(Boolean, default=False)
     can_reset_hwid = Column(Boolean, default=False)
     can_view_logs = Column(Boolean, default=False)
+    can_ban_users = Column(Boolean, default=False)
+    can_clean_banned = Column(Boolean, default=False)
+    can_modify_app_settings = Column(Boolean, default=False)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -172,6 +176,13 @@ class Reseller(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Add new reseller columns for existing database
+    for field in ["is_admin", "can_ban_users", "can_clean_banned", "can_modify_app_settings"]:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE resellers ADD COLUMN {field} BOOLEAN DEFAULT 0"))
+        except Exception:
+            pass
     # Ensure discord fields exist for existing sqlite database
     try:
         with engine.begin() as conn:

@@ -181,6 +181,9 @@ def check_reseller_access(current_creator: Creator, app_id: int, action: str):
         return
         
     reseller = current_creator.reseller
+    if getattr(reseller, "is_admin", False):
+        return
+        
     allowed_ids = []
     if reseller.allowed_apps:
         allowed_ids = [int(x) for x in reseller.allowed_apps.split(",") if x.strip()]
@@ -200,6 +203,15 @@ def check_reseller_access(current_creator: Creator, app_id: int, action: str):
     if action == "view_logs" and not reseller.can_view_logs:
         raise HTTPException(status_code=403, detail="Permission denied to view logs")
 
+    if action == "ban_users" and not getattr(reseller, "can_ban_users", False):
+        raise HTTPException(status_code=403, detail="Permission denied to ban/unban users or keys")
+
+    if action == "clean_banned" and not getattr(reseller, "can_clean_banned", False):
+        raise HTTPException(status_code=403, detail="Permission denied to clean banned entities")
+
+    if action == "modify_app_settings" and not getattr(reseller, "can_modify_app_settings", False):
+        raise HTTPException(status_code=403, detail="Permission denied to modify application settings")
+
 # --- Reseller Request Models ---
 class ResellerLoginRequest(BaseModel):
     username: str
@@ -209,20 +221,28 @@ class ResellerCreateRequest(BaseModel):
     username: str
     password: str
     allowed_apps: List[int]
+    is_admin: bool = False
     can_view_secret: bool = False
     can_manage_users: bool = False
     can_manage_licenses: bool = False
     can_reset_hwid: bool = False
     can_view_logs: bool = False
+    can_ban_users: bool = False
+    can_clean_banned: bool = False
+    can_modify_app_settings: bool = False
 
 class ResellerUpdateRequest(BaseModel):
     password: Optional[str] = None
     allowed_apps: List[int]
+    is_admin: bool = False
     can_view_secret: bool = False
     can_manage_users: bool = False
     can_manage_licenses: bool = False
     can_reset_hwid: bool = False
     can_view_logs: bool = False
+    can_ban_users: bool = False
+    can_clean_banned: bool = False
+    can_modify_app_settings: bool = False
 
 # --- Reseller Login Endpoint ---
 @app.post("/api/reseller/login")
@@ -237,11 +257,15 @@ def reseller_login(req: ResellerLoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "role": "reseller",
         "permissions": {
+            "is_admin": reseller.is_admin,
             "can_view_secret": reseller.can_view_secret,
             "can_manage_users": reseller.can_manage_users,
             "can_manage_licenses": reseller.can_manage_licenses,
             "can_reset_hwid": reseller.can_reset_hwid,
-            "can_view_logs": reseller.can_view_logs
+            "can_view_logs": reseller.can_view_logs,
+            "can_ban_users": reseller.can_ban_users,
+            "can_clean_banned": reseller.can_clean_banned,
+            "can_modify_app_settings": reseller.can_modify_app_settings
         }
     }
 
@@ -255,11 +279,15 @@ def get_resellers(current_creator: Creator = Depends(get_current_creator), db: S
         "id": r.id,
         "username": r.username,
         "allowed_apps": [int(x) for x in r.allowed_apps.split(",") if x.strip()] if r.allowed_apps else [],
+        "is_admin": r.is_admin,
         "can_view_secret": r.can_view_secret,
         "can_manage_users": r.can_manage_users,
         "can_manage_licenses": r.can_manage_licenses,
         "can_reset_hwid": r.can_reset_hwid,
         "can_view_logs": r.can_view_logs,
+        "can_ban_users": r.can_ban_users,
+        "can_clean_banned": r.can_clean_banned,
+        "can_modify_app_settings": r.can_modify_app_settings,
         "created_at": r.created_at
     } for r in resellers]
 
@@ -281,11 +309,15 @@ def create_reseller(req: ResellerCreateRequest, current_creator: Creator = Depen
         username=req.username,
         password_hash=hashed,
         allowed_apps=apps_str,
+        is_admin=req.is_admin,
         can_view_secret=req.can_view_secret,
         can_manage_users=req.can_manage_users,
         can_manage_licenses=req.can_manage_licenses,
         can_reset_hwid=req.can_reset_hwid,
-        can_view_logs=req.can_view_logs
+        can_view_logs=req.can_view_logs,
+        can_ban_users=req.can_ban_users,
+        can_clean_banned=req.can_clean_banned,
+        can_modify_app_settings=req.can_modify_app_settings
     )
     db.add(new_reseller)
     db.commit()
@@ -304,11 +336,15 @@ def update_reseller(reseller_id: int, req: ResellerUpdateRequest, current_creato
         reseller.password_hash = hash_password(req.password)
         
     reseller.allowed_apps = ",".join([str(x) for x in req.allowed_apps])
+    reseller.is_admin = req.is_admin
     reseller.can_view_secret = req.can_view_secret
     reseller.can_manage_users = req.can_manage_users
     reseller.can_manage_licenses = req.can_manage_licenses
     reseller.can_reset_hwid = req.can_reset_hwid
     reseller.can_view_logs = req.can_view_logs
+    reseller.can_ban_users = req.can_ban_users
+    reseller.can_clean_banned = req.can_clean_banned
+    reseller.can_modify_app_settings = req.can_modify_app_settings
     
     db.commit()
     return {"message": "Reseller updated successfully"}
@@ -325,6 +361,39 @@ def delete_reseller(reseller_id: int, current_creator: Creator = Depends(get_cur
     db.delete(reseller)
     db.commit()
     return {"message": "Reseller deleted successfully"}
+
+# --- Creator Profile Update Endpoint ---
+class CreatorProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+
+@app.put("/api/creator/profile")
+def update_creator_profile(req: CreatorProfileUpdateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    if getattr(current_creator, "is_reseller", False):
+        raise HTTPException(status_code=403, detail="Resellers cannot change creator profile details")
+    
+    if req.full_name is not None:
+        current_creator.full_name = req.full_name
+        
+    if req.password:
+        current_creator.password_hash = hash_password(req.password)
+        
+    db.commit()
+    return {"message": "Creator profile updated successfully"}
+
+@app.get("/api/creator/profile")
+def get_creator_profile(current_creator: Creator = Depends(get_current_creator)):
+    if getattr(current_creator, "is_reseller", False):
+        return {
+            "email": current_creator.reseller.username,
+            "full_name": "Reseller Account",
+            "is_reseller": True
+        }
+    return {
+        "email": current_creator.email,
+        "full_name": current_creator.full_name or "",
+        "is_reseller": False
+    }
 
 # --- Creator API Endpoints ---
 
@@ -420,13 +489,17 @@ def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
     
     is_res = getattr(current_creator, "is_reseller", False)
+    hide_secrets = False
     if is_res:
-        allowed_ids = []
-        if current_creator.reseller.allowed_apps:
-            allowed_ids = [int(x) for x in current_creator.reseller.allowed_apps.split(",") if x.strip()]
-        applications = [app for app in applications if app.id in allowed_ids]
-        
-    hide_secrets = is_res and not current_creator.reseller.can_view_secret
+        reseller = current_creator.reseller
+        if not getattr(reseller, "is_admin", False):
+            allowed_ids = []
+            if reseller.allowed_apps:
+                allowed_ids = [int(x) for x in reseller.allowed_apps.split(",") if x.strip()]
+            applications = [app for app in applications if app.id in allowed_ids]
+            hide_secrets = not reseller.can_view_secret
+        else:
+            hide_secrets = False
     
     return [{
         "id": app.id,
@@ -484,9 +557,7 @@ def delete_app(app_id: int, current_creator: Creator = Depends(get_current_creat
 
 @app.put("/api/creator/apps/{app_id}/settings")
 def update_app_settings(app_id: int, req: AppSettingsRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    if getattr(current_creator, "is_reseller", False):
-        raise HTTPException(status_code=403, detail="Resellers cannot change application settings")
-        
+    check_reseller_access(current_creator, app_id, "modify_app_settings")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -546,7 +617,7 @@ def reset_user_hwid(app_id: int, user_id: int, current_creator: Creator = Depend
 
 @app.post("/api/creator/apps/{app_id}/users/{user_id}/toggle-ban")
 def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    check_reseller_access(current_creator, app_id, "manage_users")
+    check_reseller_access(current_creator, app_id, "ban_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
@@ -626,7 +697,7 @@ def reset_license_hwid(app_id: int, license_id: int, current_creator: Creator = 
 
 @app.post("/api/creator/apps/{app_id}/licenses/{license_id}/toggle-ban")
 def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    check_reseller_access(current_creator, app_id, "manage_licenses")
+    check_reseller_access(current_creator, app_id, "ban_users")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
@@ -647,8 +718,7 @@ def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_cre
 
 @app.delete("/api/creator/apps/{app_id}/clean-banned")
 def clean_banned_entities(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    check_reseller_access(current_creator, app_id, "manage_users")
-    check_reseller_access(current_creator, app_id, "manage_licenses")
+    check_reseller_access(current_creator, app_id, "clean_banned")
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
     if not app: raise HTTPException(status_code=404, detail="App not found")
     

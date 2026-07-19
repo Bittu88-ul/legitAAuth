@@ -4,398 +4,778 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LegitAuth - Professional License System</title>
+    <title>LegitAuth - Elite Licensing & Auth System</title>
     <link rel="stylesheet" href="/static/style.css">
-    <!-- FontAwesome for Premium Icons -->
+    <!-- FontAwesome Pro Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
+    <!-- Premium Background Matrix/Particles Effect -->
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+
+    <!-- Split Screen Auth Layout (Login Page) -->
     <div class="auth-wrapper" id="auth-container">
         <div class="auth-left">
-            <h1 class="brand-title"><i class="fas fa-shield-alt"></i> LegitAuth</h1>
-            <p class="brand-subtitle">The Ultimate License Management Platform</p>
-            <ul class="feature-list">
-                <li><i class="fas fa-check-circle"></i> Secure Hardware ID Locking</li>
-                <li><i class="fas fa-check-circle"></i> Instant Cloud Delivery</li>
-                <li><i class="fas fa-check-circle"></i> Advanced Dashboard Analytics</li>
-            </ul>
+            <div class="auth-brand">
+                <i class="fas fa-shield-halved brand-icon animate-pulse"></i>
+                <span class="brand-name">LegitAuth</span>
+            </div>
+            <h1 class="auth-left-title">Next-Gen Licensing Platform</h1>
+            <p class="auth-left-subtitle">Secure, fast, and feature-rich licensing console designed for creators and professional developers.</p>
+            
+            <div class="login-features-grid">
+                <div class="login-feature-card">
+                    <div class="l-feat-icon"><i class="fas fa-microchip"></i></div>
+                    <div class="l-feat-content">
+                        <h4>Secure HWID Lock</h4>
+                        <p>Track hardware fingerprints to strictly block account sharing.</p>
+                    </div>
+                </div>
+                <div class="login-feature-card">
+                    <div class="l-feat-icon"><i class="fas fa-cloud-bolt"></i></div>
+                    <div class="l-feat-content">
+                        <h4>Instant Key Gen</h4>
+                        <p>Generate, deliver, and validate license keys dynamically.</p>
+                    </div>
+                </div>
+                <div class="login-feature-card">
+                    <div class="l-feat-icon"><i class="fas fa-users-viewfinder"></i></div>
+                    <div class="l-feat-content">
+                        <h4>Reseller Channels</h4>
+                        <p>Delegate licensing control to resellers with restricted scopes.</p>
+                    </div>
+                </div>
+                <div class="login-feature-card">
+                    <div class="l-feat-icon"><i class="fab fa-discord text-blur-glow"></i></div>
+                    <div class="l-feat-content">
+                        <h4>Discord Integrations</h4>
+                        <p>Link actions, log entry triggers, and self-service HWID resets.</p>
+                    </div>
+                </div>
+            </div>
         </div>
+
         <div class="auth-right">
-            <h2>Welcome Back</h2>
-            <p style="color: var(--text-muted); margin-bottom: 25px;">Sign in to access your dashboard</p>
+            <h2 class="auth-right-title">Welcome Back</h2>
+            <p class="auth-right-subtitle">Sign in to access your developer portal</p>
             
             <!-- Login Type Toggle -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px; border: 1px solid var(--glass-border); padding: 5px; border-radius: 8px; background: rgba(0,0,0,0.2);">
-                <button id="toggle-creator-btn" onclick="switchLoginType('creator')" style="flex: 1; padding: 10px; margin: 0; background: var(--primary); color: white; border: none; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;">Creator Login</button>
-                <button id="toggle-reseller-btn" onclick="switchLoginType('reseller')" style="flex: 1; padding: 10px; margin: 0; background: transparent; color: var(--text-muted); border: none; font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer;">Reseller Login</button>
+            <div class="login-toggle-container">
+                <button id="toggle-creator-btn" class="toggle-tab-btn active" onclick="switchLoginType('creator')">
+                    <i class="fas fa-code"></i> Creator Access
+                </button>
+                <button id="toggle-reseller-btn" class="toggle-tab-btn" onclick="switchLoginType('reseller')">
+                    <i class="fas fa-shop"></i> Reseller Login
+                </button>
             </div>
             
             <!-- Google Sign-In Container (Creator) -->
-            <div id="creator-login-container" style="display: flex; justify-content: center; margin-bottom: 20px;">
-                <div id="g_id_onload" data-client_id="588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
-                    data-callback="handleGoogleLogin">
+            <div id="creator-login-container" class="auth-form-panel">
+                <div class="google-btn-wrapper">
+                    <div id="g_id_onload" 
+                        data-client_id="588407370614-p2neukq31drhm95vurebqinlab0q1ltp.apps.googleusercontent.com"
+                        data-callback="handleGoogleLogin">
+                    </div>
+                    <div class="g_id_signin" 
+                        data-type="standard" 
+                        data-size="large" 
+                        data-theme="filled_black" 
+                        data-text="sign_in_with" 
+                        data-shape="pill" 
+                        data-logo_alignment="left">
+                    </div>
                 </div>
-                <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
+                <div class="or-separator">
+                    <span>Authorized Entry Only</span>
+                </div>
+                <p class="creator-agreement">Creators utilize Google OAuth authentication for maximum security.</p>
             </div>
 
             <!-- Reseller Login Container -->
-            <div id="reseller-login-container" style="display: none; flex-direction: column; gap: 15px; text-align: left; width: 100%;">
-                <div>
-                    <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Username</label>
-                    <input type="text" id="reseller-username" placeholder="Enter reseller username" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+            <div id="reseller-login-container" class="auth-form-panel" style="display: none;">
+                <div class="input-glow-group">
+                    <label class="glow-label"><i class="fas fa-user-tag"></i> Reseller Username</label>
+                    <input type="text" id="reseller-username" placeholder="e.g. rohit_reseller" autocomplete="username">
                 </div>
-                <div>
-                    <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Password</label>
-                    <input type="password" id="reseller-password" placeholder="Enter reseller password" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                <div class="input-glow-group">
+                    <label class="glow-label"><i class="fas fa-lock"></i> Reseller Password</label>
+                    <input type="password" id="reseller-password" placeholder="••••••••" autocomplete="current-password">
                 </div>
-                <button onclick="handleResellerLogin()" style="width: 100%; padding: 12px; margin-top: 10px; background: var(--success);"><i class="fas fa-sign-in-alt"></i> Login as Reseller</button>
+                <button onclick="handleResellerLogin()" class="glow-btn btn-success">
+                    <i class="fas fa-right-to-bracket"></i> Login as Reseller
+                </button>
             </div>
             
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 20px;">
-                By signing in, you agree to our Terms of Service & Privacy Policy.
+            <p class="auth-footer-text">
+                By entering, you verify compliance with LegitAuth Terms & SLA.
             </p>
         </div>
     </div>
 
+    <!-- Main Dashboard Container -->
     <div class="dashboard-container" id="dashboard-container" style="display:none;">
-        <nav>
-            <h2>LegitAuth</h2>
-            <ul>
-                <li><a href="#" onclick="showTab('apps')"><i class="fas fa-layer-group"></i> Applications</a></li>
-                <li><a href="#" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
-                <li><a href="#" onclick="showTab('docs')"><i class="fas fa-book"></i> Documentation</a></li>
-                <li><a href="#" onclick="showTab('settings')"><i class="fas fa-cog"></i> Settings</a></li>
-                <li><a href="#" id="nav-resellers" onclick="showTab('resellers')"><i class="fas fa-users-cog"></i> Resellers</a></li>
-                <li style="margin-top: 50px;"><a href="#" onclick="openLogoutModal()"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <i class="fas fa-shield-halved brand-logo-icon"></i>
+                <h2>LegitAuth</h2>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li><a href="#" class="menu-link active" onclick="showTab('apps')"><i class="fas fa-cubes"></i> <span>Applications</span></a></li>
+                <li><a href="#" class="menu-link" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> <span>Workspace</span></a></li>
+                <li><a href="#" class="menu-link" onclick="showTab('docs')"><i class="fas fa-book-bookmark"></i> <span>Documentation</span></a></li>
+                <li><a href="#" class="menu-link" id="nav-resellers" onclick="showTab('resellers')"><i class="fas fa-people-carry-box"></i> <span>Resellers</span></a></li>
+                <li><a href="#" class="menu-link" onclick="showTab('settings')"><i class="fas fa-sliders"></i> <span>Settings</span></a></li>
+                <li class="logout-menu-item"><a href="#" onclick="openLogoutModal()"><i class="fas fa-power-off"></i> <span>Logout</span></a></li>
             </ul>
         </nav>
-        <main>
-            <div id="apps-tab" class="tab-content">
 
-                <!-- Dashboard Analytics Overview -->
+        <main class="main-content">
+            <!-- 1. Applications Tab -->
+            <div id="apps-tab" class="tab-content">
+                <div class="tab-header">
+                    <div>
+                        <h1>Applications Dashboard</h1>
+                        <p class="text-muted">High-level view of all active services and analytics.</p>
+                    </div>
+                </div>
+
+                <!-- Stats Overview Cards -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <i class="fas fa-cubes icon"></i>
-                        <h4>Total Apps</h4>
-                        <h2 id="stat-apps">0</h2>
+                        <div class="stat-icon-wrapper purple"><i class="fas fa-layer-group"></i></div>
+                        <div>
+                            <h4>Total Applications</h4>
+                            <h2 id="stat-apps">0</h2>
+                        </div>
                     </div>
                     <div class="stat-card">
-                        <i class="fas fa-users icon"></i>
-                        <h4>Active Users</h4>
-                        <h2 id="stat-users">0</h2>
+                        <div class="stat-icon-wrapper emerald"><i class="fas fa-users-line"></i></div>
+                        <div>
+                            <h4>Active Users</h4>
+                            <h2 id="stat-users">0</h2>
+                        </div>
                     </div>
                     <div class="stat-card">
-                        <i class="fas fa-key icon"></i>
-                        <h4>Licenses Issued</h4>
-                        <h2 id="stat-licenses">0</h2>
+                        <div class="stat-icon-wrapper blue"><i class="fas fa-key"></i></div>
+                        <div>
+                            <h4>Licenses Issued</h4>
+                            <h2 id="stat-licenses">0</h2>
+                        </div>
                     </div>
                     <div class="stat-card">
-                        <i class="fas fa-server icon"></i>
-                        <h4>System Status</h4>
-                        <h2 style="color: var(--success); font-size: 24px;">Online</h2>
+                        <div class="stat-icon-wrapper amber animate-pulse"><i class="fas fa-heartbeat"></i></div>
+                        <div>
+                            <h4>API Server Status</h4>
+                            <h2 class="status-online">Online</h2>
+                        </div>
                     </div>
                 </div>
 
-                <div style="margin-top: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 16px; border: 1px solid var(--glass-border);">
-                    <h3 style="margin-bottom: 15px;"><i class="fas fa-chart-line"></i> Analytics Overview</h3>
-                    <canvas id="growthChart" height="80"></canvas>
-                </div>
-
-                <h2 style="margin-top: 30px;">Your Applications</h2>
-                <div class="create-app-container" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px; margin-top: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);">
-                    <h3 style="margin-bottom: 12px; color: white;"><i class="fas fa-plus-circle" style="color: var(--primary); margin-right: 8px;"></i>Create New Application</h3>
-                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                        <input type="text" id="new-app-name" placeholder="Enter application name (e.g., Vanguard Loader)" style="flex: 1; min-width: 250px; margin: 0;">
-                        <button onclick="createApp()" style="width: auto; padding: 14px 28px; margin: 0; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);"><i class="fas fa-plus"></i> Create App</button>
+                <!-- Growth Graph Analytics -->
+                <div class="glass-panel analytics-panel">
+                    <h3><i class="fas fa-chart-line header-icon"></i> Licensing & Activation Metrics</h3>
+                    <div class="chart-container">
+                        <canvas id="growthChart"></canvas>
                     </div>
                 </div>
 
-                <h2 style="margin-top: 40px; margin-bottom: 15px; font-weight: 600; color: white; display: flex; align-items: center; gap: 10px;"><i class="fas fa-cubes" style="color: var(--primary);"></i> Your Applications</h2>
-                <div id="app-list"></div>
+                <!-- Create New Application Form -->
+                <div class="create-app-card glass-panel">
+                    <div class="create-app-header">
+                        <i class="fas fa-circle-plus title-icon"></i>
+                        <div>
+                            <h3>Create New Application</h3>
+                            <p class="text-muted">Register a new software to initiate licensing controls.</p>
+                        </div>
+                    </div>
+                    <div class="create-app-form">
+                        <input type="text" id="new-app-name" placeholder="Enter application name (e.g. Vanguard Loader)" autocomplete="off">
+                        <button onclick="createApp()" class="glow-btn"><i class="fas fa-plus"></i> Initialize App</button>
+                    </div>
+                </div>
+
+                <h3 class="section-title"><i class="fas fa-list-check"></i> Registered Applications</h3>
+                <div id="app-list" class="app-list-grid"></div>
             </div>
 
+            <!-- 2. Application Workspace Tab -->
             <div id="workspace-tab" class="tab-content" style="display:none;">
-                <h2>Application Workspace</h2>
-                <div style="margin-bottom: 20px;">
-                    <label>Select Application: </label>
-                    <select id="app-selector" onchange="switchWorkspaceApp(this.value)" style="padding: 10px; width: 300px; border-radius: 8px;">
-                        <option value="">-- Select an App --</option>
+                <div class="tab-header">
+                    <div>
+                        <h1>Application Workspace</h1>
+                        <p class="text-muted">Manage specific clients, keys, and log queues for your selected software.</p>
+                    </div>
+                </div>
+                
+                <div class="glass-panel workspace-selector-panel">
+                    <label class="glow-label"><i class="fas fa-folder-open"></i> Select Active Application</label>
+                    <select id="app-selector" onchange="switchWorkspaceApp(this.value)">
+                        <option value="">-- Choose Application --</option>
                     </select>
                 </div>
                 
-                <div id="app-workspace-content" style="display:none; margin-top: 30px;">
-                    <div class="app-tabs" style="display:flex; gap:10px; margin-bottom: 20px;">
-                        <button id="btn-tab-users" class="tab-btn active-tab-btn" onclick="showAppTab('users')" style="width:auto; padding:8px 16px;"><i class="fas fa-users"></i> Users</button>
-                        <button id="btn-tab-licenses" class="tab-btn" onclick="showAppTab('licenses')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-key"></i> Licenses</button>
-                        <button id="btn-tab-logs" class="tab-btn" onclick="showAppTab('logs')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-terminal"></i> Console</button>
-                        <button id="btn-tab-settings" class="tab-btn" onclick="showAppTab('settings')" style="width:auto; padding:8px 16px; background:var(--bg-panel);"><i class="fas fa-cog"></i> Settings</button>
+                <div id="app-workspace-content" class="workspace-inner" style="display:none;">
+                    <!-- Sub-tabs within Workspace -->
+                    <div class="sub-tabs-container">
+                        <button id="btn-tab-users" class="sub-tab-btn active" onclick="showAppTab('users')"><i class="fas fa-user-shield"></i> Users</button>
+                        <button id="btn-tab-licenses" class="sub-tab-btn" onclick="showAppTab('licenses')"><i class="fas fa-key"></i> Licenses</button>
+                        <button id="btn-tab-logs" class="sub-tab-btn" onclick="showAppTab('logs')"><i class="fas fa-terminal"></i> Console Logs</button>
+                        <button id="btn-tab-settings" class="sub-tab-btn" onclick="showAppTab('settings')"><i class="fas fa-gears"></i> App Settings</button>
                     </div>
 
-                    <div id="app-users-tab" class="app-sub-tab">
-                        <h4>Create User</h4>
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <input type="text" id="new-user-name" placeholder="Username" style="width:200px; margin:0;">
-                            <input type="password" id="new-user-pass" placeholder="Password" style="width:200px; margin:0;">
-                            <input type="datetime-local" id="new-user-expiry" style="width:200px; margin:0;">
-                            <label><input type="checkbox" id="new-user-hwid" checked> HWID Lock</label>
-                            <button onclick="addUser()" style="width:auto; padding: 16px 32px;">Add User</button>
+                    <!-- 2.1 Workspace Users sub-tab -->
+                    <div id="app-users-tab" class="app-sub-tab glass-panel">
+                        <h3><i class="fas fa-user-plus"></i> Add Application User</h3>
+                        <div class="workspace-form-grid">
+                            <input type="text" id="new-user-name" placeholder="Username" autocomplete="off">
+                            <input type="password" id="new-user-pass" placeholder="Password" autocomplete="off">
+                            <div class="input-glow-group inline-group">
+                                <label class="text-muted">Expiry Time</label>
+                                <input type="datetime-local" id="new-user-expiry">
+                            </div>
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="new-user-hwid" checked>
+                                <span class="checkmark"></span> HWID Lock Enabled
+                            </label>
+                            <button onclick="addUser()" class="glow-btn btn-success"><i class="fas fa-plus"></i> Add Account</button>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-top:20px; align-items:center;">
-                            <input type="text" id="search-users" placeholder="Search Users..." onkeyup="filterTable('user-list', this.value)" style="width:300px; margin:0;">
-                            <button onclick="exportCSV('users')" style="width:auto; padding: 10px 20px; background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="fas fa-download"></i> Export CSV</button>
+                        
+                        <div class="table-actions-row">
+                            <input type="text" id="search-users" placeholder="🔍 Search Users..." onkeyup="filterTable('user-list', this.value)">
+                            <button onclick="exportCSV('users')" class="export-btn"><i class="fas fa-file-csv"></i> Export CSV</button>
                         </div>
-                        <div id="user-list"></div>
+                        <div id="user-list" class="table-container"></div>
                     </div>
 
-                    <div id="app-licenses-tab" class="app-sub-tab" style="display:none;">
-                        <h4>Generate Licenses</h4>
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <input type="number" id="new-lic-amount" placeholder="Amount" value="1" min="1" style="width:100px; margin:0;">
-                            <input type="number" id="new-lic-days" placeholder="Duration (Days)" value="30" style="width:150px; margin:0;">
-                            <label><input type="checkbox" id="new-lic-hwid" checked> HWID Lock</label>
-                            <button onclick="generateLicenses()" style="width:auto; padding: 16px 32px;">Generate</button>
+                    <!-- 2.2 Workspace Licenses sub-tab -->
+                    <div id="app-licenses-tab" class="app-sub-tab glass-panel" style="display:none;">
+                        <h3><i class="fas fa-key"></i> Generate License Keys</h3>
+                        <div class="workspace-form-grid">
+                            <input type="number" id="new-lic-amount" placeholder="Amount (e.g. 10)" value="1" min="1">
+                            <input type="number" id="new-lic-days" placeholder="Duration (Days, 0 for Lifetime)" value="30" min="0">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="new-lic-hwid" checked>
+                                <span class="checkmark"></span> HWID Lock Enabled
+                            </label>
+                            <button onclick="generateLicenses()" class="glow-btn btn-success"><i class="fas fa-gears"></i> Generate Keys</button>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-top:20px; align-items:center;">
-                            <input type="text" id="search-licenses" placeholder="Search Licenses..." onkeyup="filterTable('license-list', this.value)" style="width:300px; margin:0;">
-                            <button onclick="exportCSV('licenses')" style="width:auto; padding: 10px 20px; background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="fas fa-download"></i> Export CSV</button>
+                        
+                        <div class="table-actions-row">
+                            <input type="text" id="search-licenses" placeholder="🔍 Search License Keys..." onkeyup="filterTable('license-list', this.value)">
+                            <button onclick="exportCSV('licenses')" class="export-btn"><i class="fas fa-file-csv"></i> Export CSV</button>
                         </div>
-                        <div id="license-list"></div>
+                        <div id="license-list" class="table-container"></div>
                     </div>
 
-                    <div id="app-logs-tab" class="app-sub-tab" style="display:none;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h4><i class="fas fa-terminal"></i> Live Server Console</h4>
-                            <button onclick="loadAppWorkspaceData()" style="width:auto; padding:6px 12px; font-size:12px;"><i class="fas fa-sync-alt"></i> Refresh Logs</button>
+                    <!-- 2.3 Workspace Logs sub-tab -->
+                    <div id="app-logs-tab" class="app-sub-tab glass-panel" style="display:none;">
+                        <div class="panel-header-row">
+                            <h3><i class="fas fa-terminal"></i> Live Diagnostic Console</h3>
+                            <button onclick="loadAppWorkspaceData()" class="glow-btn btn-small"><i class="fas fa-arrows-rotate"></i> Refresh Logs</button>
                         </div>
-                        <div id="log-list" style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; margin-top: 15px; height: 350px; overflow-y: auto; font-family: monospace; border: 1px solid var(--glass-border);">
-                            <span style="color: var(--text-muted);">Awaiting logs...</span>
+                        <div id="log-list" class="terminal-view">
+                            <span class="terminal-placeholder">Awaiting log activities from API client stream...</span>
                         </div>
                     </div>
 
-                    <div id="app-settings-tab" class="app-sub-tab" style="display:none;">
-                        <h4><i class="fas fa-sliders-h"></i> Manage App Settings</h4>
-                        <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; max-width: 600px;">
-                            <label style="color: var(--text-muted); font-size: 14px;">App Status</label>
-                            <select id="settings-status">
-                                <option value="active">🟢 Active (Normal Operation)</option>
-                                <option value="paused">🔴 Paused (Maintenance Mode)</option>
-                            </select>
+                    <!-- 2.4 Workspace App-specific Settings sub-tab -->
+                    <div id="app-settings-tab" class="app-sub-tab glass-panel" style="display:none;">
+                        <h3><i class="fas fa-sliders-h"></i> Application Configuration</h3>
+                        <div class="settings-form-container">
+                            <div class="settings-field">
+                                <label class="glow-label">Service Status</label>
+                                <select id="settings-status">
+                                    <option value="active">🟢 Active (Normal Operations)</option>
+                                    <option value="paused">🔴 Maintenance Mode (Bypasses logins)</option>
+                                </select>
+                            </div>
 
-                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">Discord Webhook URL (Login Alerts)</label>
-                            <input type="text" id="settings-webhook" placeholder="https://discord.com/api/webhooks/..." style="margin-top: 5px;">
+                            <div class="settings-field">
+                                <label class="glow-label">Discord Webhook (Activation Logs)</label>
+                                <input type="text" id="settings-webhook" placeholder="https://discord.com/api/webhooks/...">
+                            </div>
 
-                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">App Version</label>
-                            <input type="text" id="settings-version" placeholder="1.0.0" style="margin-top: 5px;">
+                            <div class="settings-field">
+                                <label class="glow-label">Application Version</label>
+                                <input type="text" id="settings-version" placeholder="1.0.0">
+                            </div>
 
-                            <label style="color: var(--text-muted); font-size: 14px; margin-top: 15px; display: block;">Developer MOTD Message</label>
-                            <input type="text" id="settings-dev-msg" placeholder="Welcome to our app!" style="margin-top: 5px;">
+                            <div class="settings-field">
+                                <label class="glow-label">Developer Message of the Day (MOTD)</label>
+                                <input type="text" id="settings-dev-msg" placeholder="Welcome to LegitAuth application client!">
+                            </div>
 
-                            <button onclick="saveAppSettings()" style="margin-top: 20px;"><i class="fas fa-save"></i> Save Settings</button>
+                            <button onclick="saveAppSettings()" class="glow-btn"><i class="fas fa-save"></i> Save Settings</button>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <!-- 3. Documentation Tab -->
             <div id="docs-tab" class="tab-content" style="display:none;">
-                <h2>Developer Documentation</h2>
-                <p>Welcome to the LegitAuth integration guide. Choose your authentication method below.</p>
-                <a href="/download/auth" target="_blank"><button style="width:200px; margin-bottom: 20px;">Download Auth.cs</button></a>
+                <div class="tab-header">
+                    <div>
+                        <h1>Developer Documentation</h1>
+                        <p class="text-muted">Integrate the LegitAuth API client into your application within minutes.</p>
+                    </div>
+                </div>
 
-                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h3 style="color: var(--primary);">Initialization (Required for Both)</h3>
-                    <p>Add <code>Auth.cs</code> to your C# Project.</p>
-                    <p style="color: #fbbf24; font-size: 0.9em;">⚠️ Note: If you get a "System.Text.Json" error, please install the <b>System.Text.Json</b> package via NuGet Package Manager.</p>
-                    <pre>
-using Auth; // Add this at the very top!
+                <div class="glass-panel docs-download-box">
+                    <div>
+                        <h3>Download C# SDK File</h3>
+                        <p class="text-muted">Secure, asynchronous module built on modern System.Text.Json dependencies.</p>
+                    </div>
+                    <a href="/download/auth" target="_blank" class="glow-btn btn-success"><i class="fas fa-download"></i> Download Auth.cs</a>
+                </div>
 
-// In Form Load
+                <div class="glass-panel code-doc-section">
+                    <h3 class="docs-section-title"><i class="fas fa-arrow-right-to-bracket text-primary"></i> 1. App Initialization</h3>
+                    <p>Load the authentication client on startup. Make sure to download and add <code>Auth.cs</code> to your project.</p>
+                    <div class="code-block-wrapper">
+                        <pre><code>using Auth; // Load module namespaces
+
 private void Form1_Load(object sender, EventArgs e)
 {
+    // Initialize application credentials
     LegitAuthApp.init(
-        "APP_NAME",
-        "OWNER_ID",
-        "SECRET",
-        "1.0"
+        "APP_NAME",       // Your App Name
+        "OWNER_ID",       // Developer Owner ID
+        "SECRET",         // App Shared Secret
+        "1.0"             // App Version
     );
     
-    // Optional: Auto-load saved credentials
+    // Optional: Load saved login details
     string savedUser, savedPass;
     LegitAuthApp.LoadCredentials(out savedUser, out savedPass);
-    User.Text = savedUser;
-    Pass.Text = savedPass;
-}
-                    </pre>
+    txtUser.Text = savedUser;
+    txtPass.Text = savedPass;
+}</code></pre>
+                    </div>
                 </div>
 
-                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                    <h3 style="color: var(--primary);">Method 1: Username & Password Login</h3>
-                    <pre>
-// In Login Button
-private async void btnLogin_Click(object sender, EventArgs e)
+                <div class="glass-panel code-doc-section">
+                    <h3 class="docs-section-title"><i class="fas fa-key text-primary"></i> 2. Activate License Key</h3>
+                    <p>Validate client entry directly via single-use license key authentication.</p>
+                    <div class="code-block-wrapper">
+                        <pre><code>private async void btnLoginKey_Click(object sender, EventArgs e)
 {
-    await LegitAuthApp.login(User.Text, Pass.Text);
+    await LegitAuthApp.license(txtLicense.Text);
     
     if (LegitAuthApp.response.success)
     {
-        // Auto-save credentials for next time
-        LegitAuthApp.SaveCredentials(User.Text, Pass.Text);
-        
-        Form1 main = new Form1();
-        main.Show();
+        MessageBox.Show("Welcome! Key verified successfully.");
+        MainForm dashboard = new MainForm();
+        dashboard.Show();
         this.Hide();
     }
     else
     {
-        status.Text = LegitAuthApp.response.message;
-        Console.Beep(400, 300);
+        lblError.Text = LegitAuthApp.response.message; // Outputs reason (e.g. Expired, HWID mismatch)
     }
-}
-                    </pre>
-                </div>
-
-                <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px;">
-                    <h3 style="color: var(--primary);">Method 2: License Key Login</h3>
-                    <pre>
-// In Login Button
-private async void btnLoginKey_Click(object sender, EventArgs e)
-{
-    await LegitAuthApp.license(License.Text);
-    
-    if (LegitAuthApp.response.success)
-    {
-        Form1 main = new Form1();
-        main.Show();
-        this.Hide();
-    }
-    else
-    {
-        status.Text = LegitAuthApp.response.message;
-        Console.Beep(400, 300);
-    }
-}
-                    </pre>
+}</code></pre>
+                    </div>
                 </div>
             </div>
+
+            <!-- 4. Resellers Tab -->
             <div id="resellers-tab" class="tab-content" style="display:none;">
-                <h2><i class="fas fa-users-cog" style="color: var(--primary); margin-right: 10px;"></i>Reseller Management</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Create and manage reseller profiles with custom access permissions to specific applications.</p>
-
-                <!-- Create Reseller Section -->
-                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px; margin-bottom: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);">
-                    <h3 id="reseller-form-title" style="margin-bottom: 15px; color: white;"><i class="fas fa-user-plus" style="color: var(--primary); margin-right: 8px;"></i>Create New Reseller Profile</h3>
-                    <input type="hidden" id="edit-reseller-id" value="">
-                    
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Username</label>
-                            <input type="text" id="reseller-form-username" placeholder="e.g. rohit" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        </div>
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Password <span id="reseller-form-pass-hint" style="color: var(--text-muted); font-size: 11px;">(leave blank to keep current)</span></label>
-                            <input type="password" id="reseller-form-password" placeholder="e.g. password123" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        </div>
-                    </div>
-
-                    <!-- Application Select Checkboxes -->
-                    <div style="margin-bottom: 20px;">
-                        <label style="color: white; font-weight: bold; font-size: 14px; display: block; margin-bottom: 8px;">Select Allowed Applications</label>
-                        <div id="reseller-app-checkboxes" style="display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid var(--glass-border); max-height: 180px; overflow-y: auto;">
-                            <!-- Dynamically loaded app list checkboxes -->
-                        </div>
-                    </div>
-
-                    <!-- Permission Checkboxes -->
-                    <div style="margin-bottom: 20px;">
-                        <label style="color: white; font-weight: bold; font-size: 14px; display: block; margin-bottom: 10px;">Select Access Permissions</label>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
-                                <input type="checkbox" id="perm-view-secret" style="width: 18px; height: 18px; cursor: pointer;"> View Secret & Owner ID
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
-                                <input type="checkbox" id="perm-manage-users" style="width: 18px; height: 18px; cursor: pointer;"> Manage Users (Create/Delete)
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
-                                <input type="checkbox" id="perm-manage-licenses" style="width: 18px; height: 18px; cursor: pointer;"> Manage Licenses (Generate/Delete)
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
-                                <input type="checkbox" id="perm-reset-hwid" style="width: 18px; height: 18px; cursor: pointer;"> Reset HWID
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); cursor: pointer;">
-                                <input type="checkbox" id="perm-view-logs" style="width: 18px; height: 18px; cursor: pointer;"> View Console Logs
-                            </label>
-                        </div>
-                    </div>
-
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="saveReseller()" style="width: auto; padding: 12px 24px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Profile</button>
-                        <button onclick="clearResellerForm()" id="btn-cancel-reseller-edit" style="display: none; width: auto; padding: 12px 24px; margin: 0; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);"><i class="fas fa-times"></i> Cancel Edit</button>
+                <div class="tab-header">
+                    <div>
+                        <h1>Reseller Network Control</h1>
+                        <p class="text-muted">Configure partner permissions, allocate allowed applications, and check logs.</p>
                     </div>
                 </div>
 
-                <!-- Resellers List Section -->
-                <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); padding: 25px; border-radius: 16px;">
-                    <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-users" style="color: var(--primary); margin-right: 8px;"></i>Configured Reseller Profiles</h3>
-                    <div id="resellers-list-container">
-                        <!-- Loaded list table -->
+                <!-- Sub-tabs for Reseller management -->
+                <div class="sub-tabs-container">
+                    <button id="btn-resellers-list" class="sub-tab-btn active" onclick="switchResellersSubTab('resellers-list-panel')"><i class="fas fa-users-gear"></i> Active Profiles</button>
+                    <button id="btn-resellers-create" class="sub-tab-btn" onclick="switchResellersSubTab('resellers-create-panel')"><i class="fas fa-user-plus"></i> Configure Reseller</button>
+                </div>
+
+                <!-- 4.1 Resellers List Panel -->
+                <div id="resellers-list-panel" class="reseller-sub-content">
+                    <div class="glass-panel">
+                        <h3 class="section-title-inside"><i class="fas fa-users"></i> Registered Resellers</h3>
+                        <div id="resellers-list-container">
+                            <!-- Filled dynamically by loadResellers() -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4.2 Reseller Create/Edit Form Panel -->
+                <div id="resellers-create-panel" class="reseller-sub-content" style="display:none;">
+                    <div class="glass-panel">
+                        <h3 id="reseller-form-title"><i class="fas fa-user-plus"></i> Create New Reseller Profile</h3>
+                        <input type="hidden" id="edit-reseller-id" value="">
+                        
+                        <div class="form-inputs-row">
+                            <div class="input-glow-group">
+                                <label class="glow-label">Reseller Username</label>
+                                <input type="text" id="reseller-form-username" placeholder="e.g. rohit">
+                            </div>
+                            <div class="input-glow-group">
+                                <label class="glow-label">Password <span id="reseller-form-pass-hint" style="display: none; font-size:11px; color:var(--text-muted);">(leave blank to keep current)</span></label>
+                                <input type="password" id="reseller-form-password" placeholder="Password">
+                            </div>
+                        </div>
+
+                        <!-- Reseller Access applications checkboxes -->
+                        <div class="checkbox-list-container">
+                            <label class="glow-label"><i class="fas fa-folder-tree"></i> Grant Access to Applications</label>
+                            <div id="reseller-app-checkboxes" class="app-checkboxes-panel">
+                                <!-- Dynamic check fields -->
+                            </div>
+                        </div>
+
+                        <!-- Reseller specific permissions checkboxes -->
+                        <div class="checkbox-list-container">
+                            <label class="glow-label"><i class="fas fa-key"></i> Grant Licensing Scopes</label>
+                            
+                            <!-- Master Admin override checkbox -->
+                            <div class="admin-override-box">
+                                <label class="custom-checkbox admin-check">
+                                    <input type="checkbox" id="perm-is-admin" onchange="toggleResellerAdminState(this.checked)">
+                                    <span class="checkmark"></span> 👑 Administrator (Bypasses app limitations & unlocks all permissions)
+                                </label>
+                            </div>
+
+                            <div class="permissions-checkboxes-grid">
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-view-secret">
+                                    <span class="checkmark"></span> View Application Secrets
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-manage-users">
+                                    <span class="checkmark"></span> Create & Delete Users
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-manage-licenses">
+                                    <span class="checkmark"></span> Generate & Delete Keys
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-reset-hwid">
+                                    <span class="checkmark"></span> Reset HWID
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-view-logs">
+                                    <span class="checkmark"></span> View Console Log Output
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-ban-users">
+                                    <span class="checkmark"></span> Ban/Unban Accounts & Keys
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-clean-banned">
+                                    <span class="checkmark"></span> Clean Banned Entries
+                                </label>
+                                <label class="custom-checkbox">
+                                    <input type="checkbox" id="perm-modify-app-settings">
+                                    <span class="checkmark"></span> Modify Application Config
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="reseller-form-buttons">
+                            <button onclick="saveReseller()" class="glow-btn btn-success"><i class="fas fa-save"></i> Save Profile</button>
+                            <button onclick="clearResellerForm()" id="btn-cancel-reseller-edit" class="cancel-btn" style="display: none;"><i class="fas fa-xmark"></i> Cancel Edit</button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- 5. Settings Tab (revamped with sub-tabs) -->
             <div id="settings-tab" class="tab-content" style="display:none;">
-                <h2>Account Settings</h2>
-                <div style="background: rgba(0,0,0,0.3); padding: 30px; border-radius: 12px; margin-top: 20px;">
-                    <h3 style="color: white; margin-bottom: 20px;"><i class="fas fa-user-circle"></i> Profile Overview</h3>
-                    <p style="color: var(--text-muted); margin-bottom: 10px;">Email: <span id="profile-email" style="color: white;">Loading...</span></p>
-                    <div style="display:inline-block; padding: 12px 24px; background: rgba(255,255,255,0.05); border-radius: 8px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;">
-                        <i class="fab fa-google" style="color: white; margin-right: 8px;"></i> Authenticated via Google Workspace
+                <div class="tab-header">
+                    <div>
+                        <h1>Console Configurations</h1>
+                        <p class="text-muted">Manage profile details, set global app default values, configure Discord logs, and change theme.</p>
                     </div>
-                    
-                    <h3 style="color: white; margin-bottom: 15px; margin-top:30px;"><i class="fas fa-key"></i> Your API Token (LegitAuth)</h3>
-                    <p style="color: var(--text-muted); margin-bottom:8px;">Ye token Discord bot ko backend se communicate karne ke liye chahiye:</p>
-                    <div style="display:flex; gap:10px; margin-bottom:20px;">
-                        <input type="text" id="profile-api-token" readonly style="flex:1; background: rgba(0,0,0,0.5); color: white; font-family: monospace; padding:10px; border-radius:8px; border:1px solid var(--glass-border);" />
-                        <button onclick="copyToClipboard(document.getElementById('profile-api-token').value)" style="width:auto; padding: 0 20px; height: 46px;"><i class="fas fa-copy"></i></button>
+                </div>
+
+                <!-- Sub-tabs within Settings -->
+                <div class="sub-tabs-container">
+                    <button id="btn-settings-profile" class="sub-tab-btn active" onclick="switchSettingsSubTab('settings-profile')"><i class="fas fa-id-card"></i> Profile Overview</button>
+                    <button id="btn-settings-defaults" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-defaults')"><i class="fas fa-gears"></i> App Defaults</button>
+                    <button id="btn-settings-discord" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-discord')"><i class="fab fa-discord"></i> Discord Integration</button>
+                    <button id="btn-settings-theme" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-theme')"><i class="fas fa-palette"></i> Accent Theme</button>
+                </div>
+
+                <!-- 5.1 Profile Settings Sub-tab -->
+                <div id="settings-profile" class="settings-sub-content">
+                    <div class="glass-panel">
+                        <h3><i class="fas fa-user-circle"></i> Profile Credentials</h3>
+                        <div class="profile-details-block">
+                            <p class="text-muted">Email Address: <span id="profile-email" class="profile-highlight-text">Loading...</span></p>
+                            <div class="google-auth-badge">
+                                <i class="fab fa-google"></i> Authenticated via Google Workspace
+                            </div>
+                        </div>
+
+                        <!-- Update Profile Form -->
+                        <div class="settings-form-container border-top">
+                            <h4>Update Account Details</h4>
+                            <div class="settings-field">
+                                <label class="glow-label">Creator Full Name</label>
+                                <input type="text" id="profile-full-name" placeholder="Enter your full name">
+                            </div>
+                            <div class="settings-field">
+                                <label class="glow-label">Update Account Password</label>
+                                <input type="password" id="profile-new-password" placeholder="Enter new password (optional)">
+                            </div>
+                            <button onclick="saveCreatorProfile()" class="glow-btn"><i class="fas fa-user-pen"></i> Update Credentials</button>
+                        </div>
+
+                        <!-- Discord OAuth link configuration -->
+                        <div class="discord-oauth-card border-top">
+                            <h4>Discord Account Verification</h4>
+                            <p class="text-muted">Link your personal Discord account to enable OAuth roles and developer dashboard authorizations.</p>
+                            
+                            <div id="discord-link-status" class="discord-status-panel">
+                                <button onclick="linkDiscordAccount()" class="glow-btn discord-auth-btn"><i class="fab fa-discord"></i> Link Discord Account</button>
+                            </div>
+                            
+                            <div id="discord-linked-status" class="discord-status-panel" style="display: none;">
+                                <div class="discord-user-badge">
+                                    <i class="fab fa-discord discord-logo-icon"></i>
+                                    <div>
+                                        <p class="linked-label">Linked Discord Account</p>
+                                        <h4 id="discord-user-tag">Unknown#0000</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5.2 System Defaults Settings Sub-tab -->
+                <div id="settings-defaults" class="settings-sub-content" style="display:none;">
+                    <div class="glass-panel">
+                        <h3><i class="fas fa-laptop-code"></i> Application Defaults</h3>
+                        <p class="text-muted">Setup settings applied automatically whenever you create a new application.</p>
+                        
+                        <div class="settings-form-container">
+                            <div class="settings-field">
+                                <label class="glow-label">Default New App Status</label>
+                                <select id="default-app-status">
+                                    <option value="active">🟢 Active</option>
+                                    <option value="paused">🔴 Paused</option>
+                                </select>
+                            </div>
+                            <div class="settings-field">
+                                <label class="glow-label">Default Client Version</label>
+                                <input type="text" id="default-app-version" value="1.0">
+                            </div>
+                            <div class="settings-field">
+                                <label class="glow-label">Default Developer Message (MOTD)</label>
+                                <input type="text" id="default-app-motd" value="Welcome to our application!">
+                            </div>
+                            <div class="settings-field">
+                                <label class="glow-label">Default HWID Lock Setting</label>
+                                <select id="default-app-hwid">
+                                    <option value="true">Locked on First Login</option>
+                                    <option value="false">No Hardware Restrictions</option>
+                                </select>
+                            </div>
+                            <button onclick="saveSystemDefaults()" class="glow-btn"><i class="fas fa-circle-check"></i> Save Default Config</button>
+                        </div>
+
+                        <!-- Developer access token relocated here -->
+                        <div class="dev-token-section border-top">
+                            <h4><i class="fas fa-key"></i> Developer API Token</h4>
+                            <p class="text-muted">Use this token to authenticate external tools (e.g. Discord Licensing Bot) to LegitAuth.</p>
+                            <div class="token-input-row">
+                                <input type="password" id="profile-api-token" readonly autocomplete="new-password">
+                                <button onclick="toggleTokenVisibility()" class="icon-glow-btn" title="Toggle Visibility"><i class="fas fa-eye" id="token-eye-icon"></i></button>
+                                <button onclick="copyText(document.getElementById('profile-api-token').value)" class="icon-glow-btn" title="Copy Token"><i class="fas fa-copy"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5.3 Discord Integration Sub-tab -->
+                <div id="settings-discord" class="settings-sub-content" style="display:none;">
+                    <div id="discord-integration-details" style="display: none;">
+                        <div class="glass-panel discord-status-header">
+                            <div>
+                                <h3>Discord Bot Bot-Logs Link</h3>
+                                <p class="text-muted">Guild Server: <span id="discord-status-text" style="color: white; font-weight: 600;">Not Link Configured</span></p>
+                            </div>
+                            <div>
+                                <span id="discord-status-badge" class="discord-badge">Inactive</span>
+                                <button id="discord-unlink-btn" onclick="unlinkDiscordConfig()" class="unlink-btn" style="display: none;"><i class="fas fa-trash-can"></i> Unlink Bot</button>
+                            </div>
+                        </div>
+
+                        <!-- Bot Setup Form -->
+                        <div class="glass-panel">
+                            <h3>1. Connect Licensing Bot to Server</h3>
+                            <p class="text-muted">Invite the LegitAuth bot to your server to enable automated logs, commands, and self-service features.</p>
+                            
+                            <div class="discord-invite-input-row">
+                                <input type="text" id="discord-invite-input" placeholder="Enter server invite link or code (e.g. https://discord.gg/abc)">
+                                <button onclick="resolveDiscordInvite()" class="glow-btn"><i class="fas fa-magnifying-glass"></i> Resolve Server</button>
+                            </div>
+
+                            <div class="discord-selector-fields">
+                                <div class="settings-field">
+                                    <label class="glow-label">Choose Active Server</label>
+                                    <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)">
+                                        <option value="">-- Choose Guild --</option>
+                                    </select>
+                                </div>
+                                <div class="invite-link-wrapper">
+                                    <a href="#" id="discord-invite-link" target="_blank" class="glow-btn discord-auth-btn"><i class="fas fa-robot"></i> Authorize Bot on Server</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bot Sub-categories settings -->
+                        <div class="glass-panel">
+                            <h3>2. Configure Bot Capabilities</h3>
+                            
+                            <div class="sub-tabs-container mini-sub-tabs">
+                                <button id="btn-sub-general" class="sub-tab-btn active" onclick="switchDiscordSubTab('discord-sub-general')">General</button>
+                                <button id="btn-sub-logs" class="sub-tab-btn" onclick="switchDiscordSubTab('discord-sub-logs')">Logging Channels</button>
+                                <button id="btn-sub-welcome" class="sub-tab-btn" onclick="switchDiscordSubTab('discord-sub-welcome')">Welcome Messages</button>
+                            </div>
+
+                            <!-- 5.3.1 General Bot sub-tab -->
+                            <div id="discord-sub-general" class="discord-sub-content">
+                                <div class="settings-form-container">
+                                    <label class="custom-checkbox">
+                                        <input type="checkbox" id="discord-member-reset-enabled">
+                                        <span class="checkmark"></span> Enable Client Self HWID Resets
+                                    </label>
+                                    <p class="checkbox-help-text">Allow users to reset their HWID once every 24 hours directly from Discord commands.</p>
+
+                                    <label class="custom-checkbox">
+                                        <input type="checkbox" id="discord-dm-notifications">
+                                        <span class="checkmark"></span> DM Key details to Users on Activation
+                                    </label>
+                                    
+                                    <div class="settings-field">
+                                        <label class="glow-label">Linked Section ID (Category for client rooms)</label>
+                                        <select id="discord-section-selector">
+                                            <option value="">-- Choose Category --</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="settings-field">
+                                        <label class="glow-label">Welcome Log Embed Color</label>
+                                        <div class="color-picker-row">
+                                            <input type="text" id="discord-embed-color" value="#00FFAA">
+                                            <input type="color" id="discord-embed-color-picker" value="#00FFAA" oninput="document.getElementById('discord-embed-color').value = this.value">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 5.3.2 Logging Channels Bot sub-tab -->
+                            <div id="discord-sub-logs" class="discord-sub-content" style="display: none;">
+                                <div class="settings-form-container">
+                                    <label class="custom-checkbox">
+                                        <input type="checkbox" id="discord-log-enabled">
+                                        <span class="checkmark"></span> Enable Bot Action logs
+                                    </label>
+
+                                    <label class="custom-checkbox">
+                                        <input type="checkbox" id="discord-login-log-enabled">
+                                        <span class="checkmark"></span> Log all Key Authentication requests
+                                    </label>
+                                    
+                                    <div class="settings-field">
+                                        <label class="glow-label">Choose Target Logging Channel</label>
+                                        <select id="discord-channel-selector">
+                                            <option value="">-- Choose Channel --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 5.3.3 Welcome Messages Bot sub-tab -->
+                            <div id="discord-sub-welcome" class="discord-sub-content" style="display: none;">
+                                <div class="settings-form-container">
+                                    <label class="custom-checkbox">
+                                        <input type="checkbox" id="discord-welcome-enabled" onchange="toggleWelcomeInput(this.checked)">
+                                        <span class="checkmark"></span> Send greeting text to client rooms
+                                    </label>
+                                    
+                                    <div id="discord-welcome-msg-container" class="settings-field">
+                                        <label class="glow-label">Welcome Message Text</label>
+                                        <textarea id="discord-welcome-msg" rows="3" placeholder="Welcome {user} to LegitAuth server! Your license was loaded."></textarea>
+                                    </div>
+
+                                    <div class="settings-field">
+                                        <label class="glow-label">Role ID given on Authentication</label>
+                                        <select id="discord-role-selector">
+                                            <option value="">-- Choose Role --</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="settings-field">
+                                        <label class="glow-label">Role name/ID given to verified buyers</label>
+                                        <input type="text" id="discord-role-on-register" placeholder="e.g. Buyer">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="saveDiscordConfig()" class="glow-btn" style="margin-top: 20px;"><i class="fas fa-floppy-disk"></i> Sync Discord settings</button>
+                        </div>
                     </div>
 
-                    <h3 style="color: white; margin-bottom: 15px;"><i class="fas fa-palette"></i> Theme Customization</h3>
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="setTheme('#8b5cf6')" style="width:40px; height:40px; background:#8b5cf6; border-radius:50%;"></button>
-                        <button onclick="setTheme('#3b82f6')" style="width:40px; height:40px; background:#3b82f6; border-radius:50%;"></button>
-                        <button onclick="setTheme('#10b981')" style="width:40px; height:40px; background:#10b981; border-radius:50%;"></button>
-                        <button onclick="setTheme('#f43f5e')" style="width:40px; height:40px; background:#f43f5e; border-radius:50%;"></button>
-                        <button onclick="setTheme('#f59e0b')" style="width:40px; height:40px; background:#f59e0b; border-radius:50%;"></button>
+                    <!-- Not Linked Panel -->
+                    <div id="discord-setup-hint" class="glass-panel discord-not-linked-panel" style="display: block;">
+                        <i class="fab fa-discord main-dis-icon"></i>
+                        <h3>Discord integration requires Account Verification</h3>
+                        <p class="text-muted">Please authenticate your Discord profile under the <strong>Profile Overview</strong> sub-tab first.</p>
+                    </div>
+                </div>
+
+                <!-- 5.4 Theme Switcher Settings Sub-tab -->
+                <div id="settings-theme" class="settings-sub-content" style="display:none;">
+                    <div class="glass-panel">
+                        <h3><i class="fas fa-paintbrush"></i> Custom Aesthetics</h3>
+                        <p class="text-muted">Modify the primary accent glows of your LegitAuth console layout.</p>
+                        
+                        <div class="color-presets-row">
+                            <button onclick="setTheme('#8b5cf6')" class="preset-color-btn" style="background:#8b5cf6;" title="Purple Glow"></button>
+                            <button onclick="setTheme('#3b82f6')" class="preset-color-btn" style="background:#3b82f6;" title="Blue Glow"></button>
+                            <button onclick="setTheme('#10b981')" class="preset-color-btn" style="background:#10b981;" title="Emerald Glow"></button>
+                            <button onclick="setTheme('#f43f5e')" class="preset-color-btn" style="background:#f43f5e;" title="Rose Glow"></button>
+                            <button onclick="setTheme('#f59e0b')" class="preset-color-btn" style="background:#f59e0b;" title="Amber Glow"></button>
+                        </div>
                     </div>
                 </div>
             </div>
-
         </main>
     </div>
-
-    <footer>
-        &copy; 2026 LegitAuth. All rights reserved. Designed for Professionals.
-    </footer>
-
-    <!-- Toast Notifications Container -->
-    <div id="toast-container"></div>
 
     <!-- Confirm Logout Modal -->
     <div id="logout-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content text-center">
-            <h3 style="margin-top:0; color: white;"><i class="fas fa-sign-out-alt" style="color:var(--danger); margin-right:8px;"></i>Confirm Logout</h3>
-            <p style="color: var(--text-muted); margin: 15px 0; font-size: 14px; line-height: 1.5;">
-                Are you sure you want to log out? <br>
-                Please type <strong style="color: var(--primary);">logout</strong> below and press <strong style="color: var(--primary);">Enter</strong> to confirm.
+            <h3 class="modal-title"><i class="fas fa-triangle-exclamation"></i> Confirm Logout</h3>
+            <p class="modal-desc">
+                Are you sure you want to exit your creator dashboard? <br>
+                Please type <strong class="highlight-text">logout</strong> below to verify.
             </p>
-            <input type="text" id="logout-confirm-input" placeholder="Type 'logout' here..." style="width: 100%; text-align: center; margin-bottom: 20px; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); outline: none; box-sizing: border-box;">
-            <div style="display: flex; gap: 10px; justify-content: center;">
-                <button onclick="submitLogout()" style="background: var(--danger); color: white; width: auto; padding: 10px 25px; margin: 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);"><i class="fas fa-sign-out-alt"></i> Logout</button>
-                <button onclick="closeLogoutModal()" style="background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); width: auto; padding: 10px 25px; margin: 0; border-radius: 8px; cursor: pointer;">Cancel</button>
+            <input type="text" id="logout-confirm-input" placeholder="Type 'logout' here...">
+            <div class="modal-buttons">
+                <button onclick="submitLogout()" class="glow-btn btn-danger"><i class="fas fa-power-off"></i> Logout</button>
+                <button onclick="closeLogoutModal()" class="glow-btn btn-cancel">Cancel</button>
             </div>
         </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
 
     <script src="/static/app.js"></script>
 </body>
