@@ -94,7 +94,15 @@ async function loadApps() {
         const res = await fetch(`${API_URL}/apps`, {
             headers: {'Authorization': `Bearer ${token}`}
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+            if (res.status === 401) {
+                logout();
+                showToast('Session expired. Please log in again.', 'error');
+            } else {
+                showToast('Failed to fetch applications from server.', 'error');
+            }
+            return;
+        }
         const apps = await res.json();
         currentApps = apps;
         
@@ -159,9 +167,8 @@ async function loadApps() {
             }
         });
         
-        // Quick setup call removed.
     } catch (e) {
-        logout();
+        showToast('Server is offline or connection failed. Please check backend status.', 'error');
     }
 }
 
