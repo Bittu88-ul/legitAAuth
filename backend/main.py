@@ -127,7 +127,6 @@ class DiscordConfigRequest(BaseModel):
     discord_welcome_msg: Optional[str] = "Welcome to the Server!"
     discord_role_on_register: Optional[str] = None
     discord_dm_notifications: Optional[bool] = True
-    discord_allowed_roles: Optional[str] = None
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -207,7 +206,7 @@ def log_app_action(db: Session, app_id: int, action: str, description: str):
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.creator_id == current_creator.id).all()
-    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications, "discord_allowed_roles": app.discord_allowed_roles} for app in applications]
+    return [{"id": app.id, "app_name": app.app_name, "owner_id": app.owner_id, "secret": app.secret, "status": app.status, "webhook_url": app.webhook_url, "version": app.version, "dev_message": app.dev_message, "created_at": app.created_at, "discord_guild_id": app.discord_guild_id, "discord_channel_id": app.discord_channel_id, "discord_guild_name": app.discord_guild_name, "discord_channel_name": app.discord_channel_name, "discord_log_enabled": app.discord_log_enabled, "discord_welcome_enabled": app.discord_welcome_enabled, "discord_welcome_msg": app.discord_welcome_msg, "discord_role_on_register": app.discord_role_on_register, "discord_dm_notifications": app.discord_dm_notifications} for app in applications]
 
 @app.post("/api/creator/apps/create")
 def create_app(req: AppCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -243,27 +242,6 @@ def update_app_settings(app_id: int, req: AppSettingsRequest, current_creator: C
     app.dev_message = req.dev_message
     db.commit()
     return {"message": "Settings updated"}
-
-@app.put("/api/creator/apps/{app_id}/rename")
-def rename_app(app_id: int, new_name: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    if not new_name or new_name.strip() == "":
-        raise HTTPException(status_code=400, detail="New name cannot be empty")
-    app.app_name = new_name.strip()
-    db.commit()
-    return {"message": "Application renamed", "app_name": app.app_name}
-
-@app.post("/api/creator/apps/{app_id}/reset-secret")
-def reset_app_secret(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    new_secret = secrets.token_hex(32)
-    app.secret = new_secret
-    db.commit()
-    return {"message": "Secret reset", "secret": new_secret}
 
 @app.post("/api/creator/apps/{app_id}/users")
 def add_app_user(app_id: int, req: UserCreateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -319,30 +297,6 @@ def toggle_user_ban(app_id: int, user_id: int, current_creator: Creator = Depend
     db.commit()
     log_app_action(db, app.id, "USER_BAN_TOGGLE", f"Changed status of user {user.username} to {user.status}")
     return {"message": f"User status changed to {user.status}"}
-
-@app.post("/api/creator/apps/{app_id}/users/{user_id}/ban")
-def ban_user(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.status = "banned"
-    db.commit()
-    return {"message": "User banned"}
-
-@app.post("/api/creator/apps/{app_id}/users/{user_id}/unban")
-def unban_user(app_id: int, user_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    user = db.query(AppUser).filter(AppUser.id == user_id, AppUser.app_id == app.id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.status = "active"
-    db.commit()
-    return {"message": "User unbanned"}
 
 @app.put("/api/creator/apps/{app_id}/users/{user_id}/password")
 def update_user_password(app_id: int, user_id: int, req: UserPasswordUpdateRequest, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -406,37 +360,6 @@ def reset_license_hwid(app_id: int, license_id: int, current_creator: Creator = 
     log_app_action(db, app.id, "HWID_RESET", f"Reset HWID for license {lic.license_key}")
     return {"message": "HWID Reset Successful"}
 
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/reset-ip")
-def reset_license_ip(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic:
-        raise HTTPException(status_code=404, detail="License not found")
-    lic.last_ip = None
-    db.commit()
-    return {"message": "License IP reset"}
-
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/extend")
-def extend_license(app_id: int, license_id: int, days: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic:
-        raise HTTPException(status_code=404, detail="License not found")
-    if lic.expires_at:
-        lic.expires_at += timedelta(days=days)
-    else:
-        # If never set, set based on duration_days if any
-        if lic.duration_days > 0:
-            lic.expires_at = datetime.utcnow() + timedelta(days=lic.duration_days + days)
-        else:
-            lic.expires_at = datetime.utcnow() + timedelta(days=days)
-    db.commit()
-    return {"message": f"License extended by {days} days", "new_expiry": lic.expires_at.isoformat()}
-
 @app.post("/api/creator/apps/{app_id}/licenses/{license_id}/toggle-ban")
 def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
@@ -448,30 +371,6 @@ def toggle_license_ban(app_id: int, license_id: int, current_creator: Creator = 
     db.commit()
     log_app_action(db, app.id, "LICENSE_BAN_TOGGLE", f"Changed status of license {lic.license_key} to {lic.status}")
     return {"message": f"License status changed to {lic.status}"}
-
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/ban")
-def ban_license(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic:
-        raise HTTPException(status_code=404, detail="License not found")
-    lic.status = "banned"
-    db.commit()
-    return {"message": "License banned"}
-
-@app.post("/api/creator/apps/{app_id}/licenses/{license_id}/unban")
-def unban_license(app_id: int, license_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id, Application.creator_id == current_creator.id).first()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
-    lic = db.query(AppLicense).filter(AppLicense.id == license_id, AppLicense.app_id == app.id).first()
-    if not lic:
-        raise HTTPException(status_code=404, detail="License not found")
-    lic.status = "active"
-    db.commit()
-    return {"message": "License unbanned"}
 
 @app.get("/api/creator/apps/{app_id}/logs")
 def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -548,7 +447,6 @@ def update_app_discord_config(app_id: int, req: DiscordConfigRequest, current_cr
     app.discord_welcome_msg = req.discord_welcome_msg
     app.discord_role_on_register = req.discord_role_on_register
     app.discord_dm_notifications = req.discord_dm_notifications
-    app.discord_allowed_roles = req.discord_allowed_roles
     db.commit()
     return {"message": "Discord integration settings updated"}
 
@@ -576,8 +474,7 @@ def get_app_by_discord_channel(channel_id: str, current_creator: Creator = Depen
         "discord_welcome_enabled": app.discord_welcome_enabled,
         "discord_welcome_msg": app.discord_welcome_msg,
         "discord_role_on_register": app.discord_role_on_register,
-        "discord_dm_notifications": app.discord_dm_notifications,
-        "discord_allowed_roles": app.discord_allowed_roles
+        "discord_dm_notifications": app.discord_dm_notifications
     }
 
 # --- Discord OAuth2 Endpoints ---
@@ -746,23 +643,6 @@ def get_discord_guild_channels(guild_id: str, current_creator: Creator = Depends
         raise HTTPException(status_code=400, detail="Could not get channels from bot, make sure bot is in the server")
     channels = [c for c in res.json() if c["type"] ==0] # Only text channels
     return channels
-
-@app.get("/api/creator/discord/guilds/{guild_id}/roles")
-def get_discord_guild_roles(guild_id: str, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
-    if not DISCORD_BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="Discord bot token missing")
-    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-    res = requests.get(f"https://discord.com/api/v10/guilds/{guild_id}/roles", headers=headers)
-    if res.status_code != 200:
-        raise HTTPException(status_code=400, detail="Could not get roles from bot, make sure bot is in the server")
-    roles = res.json()
-    # Filter out @everyone (role ID is same as guild ID) and return essential role details
-    filtered_roles = [
-        {"id": r["id"], "name": r["name"], "color": r["color"]}
-        for r in roles
-        if r["id"] != guild_id
-    ]
-    return filtered_roles
 
 @app.get("/api/creator/discord/invite-url")
 def get_bot_invite_url(guild_id: Optional[str] = None):

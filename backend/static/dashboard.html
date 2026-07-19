@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LegitAuth - Professional License System</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link rel="icon" type="image/png" href="/static/chatgpt_logo.png">
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -17,10 +16,7 @@
 
     <div class="auth-wrapper" id="auth-container">
         <div class="auth-left">
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-                <img src="/static/chatgpt_logo.png" alt="ChatGPT Logo" style="width: 48px; height: 48px; border-radius: 50%; box-shadow: 0 0 15px var(--primary);">
-                <h1 class="brand-title" style="margin: 0;">LegitAuth</h1>
-            </div>
+            <h1 class="brand-title"><i class="fas fa-shield-alt"></i> LegitAuth</h1>
             <p class="brand-subtitle">The Ultimate License Management Platform</p>
             <ul class="feature-list">
                 <li><i class="fas fa-check-circle"></i> Secure Hardware ID Locking</li>
@@ -48,10 +44,7 @@
 
     <div class="dashboard-container" id="dashboard-container" style="display:none;">
         <nav>
-            <h2 style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 40px;">
-                <img src="/static/chatgpt_logo.png" alt="ChatGPT Logo" style="width: 32px; height: 32px; border-radius: 50%; box-shadow: 0 0 10px var(--primary);">
-                LegitAuth
-            </h2>
+            <h2>LegitAuth</h2>
             <ul>
                 <li><a href="#" onclick="showTab('apps')"><i class="fas fa-layer-group"></i> Applications</a></li>
                 <li><a href="#" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i> Workspace</a></li>
@@ -364,16 +357,6 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                             </div>
                             <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
                         </div>
-
-                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Allowed Roles to Use Bot</label>
-                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Only members with at least one of the selected roles can execute bot commands. Select none to allow everyone.</span>
-                            <div id="discord-roles-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); margin-top: 8px;">
-                                <span style="color: var(--text-muted); font-size: 13px;">Please select a server first to load roles.</span>
-                            </div>
-                        </div>
-
-                        <button onclick="saveDiscordConfig()" style="margin-top: 20px; width: auto; padding: 10px 20px; background: var(--success);"><i class="fas fa-save"></i> Save Features</button>
                     </div>
                 </div>
             </div>
