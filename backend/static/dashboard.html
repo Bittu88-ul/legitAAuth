@@ -364,6 +364,16 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                             </div>
                             <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
                         </div>
+
+                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                            <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Allowed Roles to Use Bot</label>
+                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Only members with at least one of the selected roles can execute bot commands. Select none to allow everyone.</span>
+                            <div id="discord-roles-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.4); padding: 12px; border-radius: 8px; border: 1px solid var(--glass-border); margin-top: 8px;">
+                                <span style="color: var(--text-muted); font-size: 13px;">Please select a server first to load roles.</span>
+                            </div>
+                        </div>
+
+                        <button onclick="saveDiscordConfig()" style="margin-top: 20px; width: auto; padding: 10px 20px; background: var(--success);"><i class="fas fa-save"></i> Save Features</button>
                     </div>
                 </div>
             </div>
