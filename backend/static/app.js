@@ -701,9 +701,51 @@ async function loadDiscordGuilds() {
     }
 }
 
+async function loadDiscordGuildRoles(guildId, selectedRoleIds = []) {
+    const token = localStorage.getItem('token');
+    const container = document.getElementById('discord-roles-list');
+    if (!container) return;
+    container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Loading roles...</span>';
+    
+    try {
+        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/roles`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const roles = await res.json();
+            container.innerHTML = '';
+            if (roles.length === 0) {
+                container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">No server roles found.</span>';
+                return;
+            }
+            roles.forEach(role => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                div.style.gap = '10px';
+                
+                const isChecked = selectedRoleIds.includes(role.id) ? 'checked' : '';
+                const colorHex = '#' + role.color.toString(16).padStart(6, '0');
+                const colorBadge = role.color ? `<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${colorHex};"></span>` : '';
+                
+                div.innerHTML = `
+                    <input type="checkbox" name="discord-role-checkbox" value="${role.id}" ${isChecked} style="width:16px; height:16px; cursor:pointer;">
+                    <span style="color: white; font-size: 14px; display:flex; align-items:center; gap:6px;">${colorBadge} ${role.name}</span>
+                `;
+                container.appendChild(div);
+            });
+        } else {
+            container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Invite bot to the server first to load roles.</span>';
+        }
+    } catch (e) {
+        container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Error loading roles.</span>';
+    }
+}
+
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
+        document.getElementById('discord-roles-list').innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Please select a server first to load roles.</span>';
         await setBotInviteLink('discord-invite-link');
         return;
     }
@@ -715,8 +757,9 @@ async function onDiscordGuildSelect(guildId) {
     await setBotInviteLink('discord-invite-link', guildId);
     await setBotInviteLink('btn-step2', guildId);
     
-    // Load channels
+    // Load channels and roles
     await loadDiscordGuildChannels(guildId);
+    await loadDiscordGuildRoles(guildId);
 }
 
 async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
@@ -765,6 +808,15 @@ async function switchDiscordApp(appId) {
     const statusBadge = document.getElementById('discord-status-badge');
     const unlinkBtn = document.getElementById('discord-unlink-btn');
     
+    // Set default values for all bot configurations first
+    document.getElementById('discord-log-enabled').checked = false;
+    document.getElementById('discord-welcome-enabled').checked = false;
+    document.getElementById('discord-welcome-msg').value = "Welcome to the Server!";
+    document.getElementById('discord-role-on-register').value = "";
+    document.getElementById('discord-dm-notifications').checked = true;
+    document.getElementById('discord-welcome-msg-container').style.display = 'none';
+    document.getElementById('discord-roles-list').innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Please select a server first to load roles.</span>';
+    
     if (app.discord_guild_id && app.discord_channel_id) {
         statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
         statusBadge.innerText = 'Active';
@@ -772,6 +824,16 @@ async function switchDiscordApp(appId) {
         statusBadge.style.color = '#10b981';
         statusBadge.style.borderColor = '#10b981';
         unlinkBtn.style.display = 'inline-block';
+        
+        // Populate bot configuration values from application settings
+        document.getElementById('discord-log-enabled').checked = !!app.discord_log_enabled;
+        document.getElementById('discord-welcome-enabled').checked = !!app.discord_welcome_enabled;
+        document.getElementById('discord-welcome-msg').value = app.discord_welcome_msg || "Welcome to the Server!";
+        document.getElementById('discord-role-on-register').value = app.discord_role_on_register || "";
+        document.getElementById('discord-dm-notifications').checked = app.discord_dm_notifications !== false;
+        toggleWelcomeInput(!!app.discord_welcome_enabled);
+        
+        const selectedRoles = app.discord_allowed_roles ? app.discord_allowed_roles.split(",") : [];
         
         // Populate the guild selector
         resolvedGuildId = app.discord_guild_id;
@@ -788,8 +850,9 @@ async function switchDiscordApp(appId) {
         
         await setBotInviteLink('discord-invite-link', resolvedGuildId);
         
-        // Load channels
+        // Load channels and roles
         await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
+        await loadDiscordGuildRoles(resolvedGuildId, selectedRoles);
     } else {
         statusText.innerText = 'Not Configured';
         statusBadge.innerText = 'Inactive';
@@ -851,6 +914,17 @@ async function saveDiscordConfig() {
     
     if (!channelId) return showToast('Please select an operating channel', 'error');
     
+    // Gather feature configurations
+    const logEnabled = document.getElementById('discord-log-enabled').checked;
+    const welcomeEnabled = document.getElementById('discord-welcome-enabled').checked;
+    const welcomeMsg = document.getElementById('discord-welcome-msg').value;
+    const roleOnRegister = document.getElementById('discord-role-on-register').value.trim();
+    const dmNotifications = document.getElementById('discord-dm-notifications').checked;
+    
+    // Gather checked command allowed roles
+    const roleCheckboxes = document.querySelectorAll('input[name="discord-role-checkbox"]:checked');
+    const allowedRoles = Array.from(roleCheckboxes).map(cb => cb.value).join(',');
+    
     const token = localStorage.getItem('token');
     try {
         const res = await fetch(`${API_URL}/apps/${appId}/discord`, {
@@ -863,7 +937,13 @@ async function saveDiscordConfig() {
                 discord_guild_id: resolvedGuildId,
                 discord_channel_id: channelId,
                 discord_guild_name: resolvedGuildName,
-                discord_channel_name: channelName
+                discord_channel_name: channelName,
+                discord_log_enabled: logEnabled,
+                discord_welcome_enabled: welcomeEnabled,
+                discord_welcome_msg: welcomeMsg,
+                discord_role_on_register: roleOnRegister || null,
+                discord_dm_notifications: dmNotifications,
+                discord_allowed_roles: allowedRoles || null
             })
         });
         if (res.ok) {
@@ -897,7 +977,13 @@ async function unlinkDiscordConfig() {
                 discord_guild_id: null,
                 discord_channel_id: null,
                 discord_guild_name: null,
-                discord_channel_name: null
+                discord_channel_name: null,
+                discord_log_enabled: false,
+                discord_welcome_enabled: false,
+                discord_welcome_msg: "Welcome to the Server!",
+                discord_role_on_register: null,
+                discord_dm_notifications: true,
+                discord_allowed_roles: null
             })
         });
         if (res.ok) {
