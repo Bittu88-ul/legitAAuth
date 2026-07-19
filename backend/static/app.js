@@ -52,6 +52,8 @@ async function handleGoogleLogin(response) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('email');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('reseller_perms');
     document.getElementById('auth-container').style.display = 'block';
     document.getElementById('dashboard-container').style.display = 'none';
     showToast('Logged out successfully', 'info');
@@ -99,6 +101,8 @@ function showDashboard() {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('dashboard-container').style.display = 'flex';
     
+    const role = localStorage.getItem('user_role') || 'creator';
+    
     // Update Settings Profile Email & Token dynamically
     const email = localStorage.getItem('email') || 'Unknown';
     const emailSpan = document.getElementById('profile-email');
@@ -110,16 +114,46 @@ function showDashboard() {
         tokenInput.value = localStorage.getItem('token') || '';
     }
     
+    if (role === 'reseller') {
+        const navResellers = document.getElementById('nav-resellers');
+        if (navResellers) navResellers.style.display = 'none';
+        
+        const createAppContainer = document.querySelector('.create-app-container');
+        if (createAppContainer) createAppContainer.style.display = 'none';
+        
+        // Hide API Token UI for resellers as it belongs to the parent creator
+        const tokenParent = tokenInput ? tokenInput.parentElement : null;
+        if (tokenParent) {
+            tokenParent.style.display = 'none';
+            if (tokenParent.previousElementSibling) {
+                tokenParent.previousElementSibling.style.display = 'none';
+            }
+        }
+    } else {
+        const navResellers = document.getElementById('nav-resellers');
+        if (navResellers) navResellers.style.display = 'block';
+        
+        const createAppContainer = document.querySelector('.create-app-container');
+        if (createAppContainer) createAppContainer.style.display = 'block';
+        
+        const tokenParent = tokenInput ? tokenInput.parentElement : null;
+        if (tokenParent) {
+            tokenParent.style.display = 'flex';
+            if (tokenParent.previousElementSibling) {
+                tokenParent.previousElementSibling.style.display = 'block';
+            }
+        }
+    }
+    
     loadApps();
-    checkDiscordLink();
-    setBotInviteLink('discord-invite-link');
 }
 
 function showTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
     document.getElementById(`${tabId}-tab`).style.display = 'block';
-    if (tabId === 'discord') {
-        checkDiscordLink();
+    if (tabId === 'resellers') {
+        loadResellers();
+        loadResellerAppCheckboxes();
     }
 }
 
@@ -167,23 +201,29 @@ async function loadApps() {
         document.getElementById('stat-users').innerText = totalUsers;
         document.getElementById('stat-licenses').innerText = totalLicenses;
 
+        const isReseller = localStorage.getItem('user_role') === 'reseller';
         apps.forEach(app => {
             // App Tab Card
             const div = document.createElement('div');
             div.className = 'app-card';
+            
+            const deleteBtnHtml = isReseller ? '' : `<button onclick="deleteApp(event, ${app.id})" style="width:auto; padding:8px 12px; height:auto; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); border-radius:8px; box-shadow:none;"><i class="fas fa-trash"></i></button>`;
+            const copyOwnerHtml = app.owner_id === '********' ? '' : `<button class="copy-field-btn" onclick="copyText('${app.owner_id}')" title="Copy Owner ID"><i class="far fa-copy"></i></button>`;
+            const copySecretHtml = app.secret === '********' ? '' : `<button class="copy-field-btn" onclick="copyText('${app.secret}')" title="Copy Secret"><i class="far fa-copy"></i></button>`;
+            
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h3 style="margin:0; display:flex; align-items:center; gap:8px;"><i class="fas fa-cube" style="color:var(--primary);"></i>${app.app_name}</h3>
-                    <button onclick="deleteApp(event, ${app.id})" style="width:auto; padding:8px 12px; height:auto; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); border-radius:8px; box-shadow:none;"><i class="fas fa-trash"></i></button>
+                    ${deleteBtnHtml}
                 </div>
                 <div style="margin-top:20px; background:rgba(0,0,0,0.25); padding:15px; border-radius:12px; border: 1px solid rgba(255,255,255,0.03);">
                     <p style="margin:5px 0; font-family:monospace; display:flex; justify-content:space-between; align-items:center; word-break:break-all;">
                         <span><strong>Owner ID:</strong> <span style="color:white;">${app.owner_id}</span></span>
-                        <button class="copy-field-btn" onclick="copyText('${app.owner_id}')" title="Copy Owner ID"><i class="far fa-copy"></i></button>
+                        ${copyOwnerHtml}
                     </p>
                     <p style="margin:8px 0 5px 0; font-family:monospace; display:flex; justify-content:space-between; align-items:center; word-break:break-all;">
                         <span><strong>Secret:</strong> <span style="color:white;">${app.secret}</span></span>
-                        <button class="copy-field-btn" onclick="copyText('${app.secret}')" title="Copy Secret"><i class="far fa-copy"></i></button>
+                        ${copySecretHtml}
                     </p>
                 </div>
             `;
@@ -275,7 +315,33 @@ async function switchWorkspaceApp(appId) {
     }
 
     document.getElementById('app-workspace-content').style.display = 'block';
-    showAppTab('users');
+    
+    const isReseller = localStorage.getItem('user_role') === 'reseller';
+    if (isReseller) {
+        const perms = JSON.parse(localStorage.getItem('reseller_perms') || '{}');
+        document.getElementById('btn-tab-users').style.display = perms.can_manage_users ? 'block' : 'none';
+        document.getElementById('btn-tab-licenses').style.display = perms.can_manage_licenses ? 'block' : 'none';
+        document.getElementById('btn-tab-logs').style.display = perms.can_view_logs ? 'block' : 'none';
+        document.getElementById('btn-tab-settings').style.display = 'none';
+        
+        let targetTab = null;
+        if (perms.can_manage_users) targetTab = 'users';
+        else if (perms.can_manage_licenses) targetTab = 'licenses';
+        else if (perms.can_view_logs) targetTab = 'logs';
+        
+        if (targetTab) {
+            showAppTab(targetTab);
+        } else {
+            document.querySelectorAll('.app-sub-tab').forEach(el => el.style.display = 'none');
+        }
+    } else {
+        document.getElementById('btn-tab-users').style.display = 'block';
+        document.getElementById('btn-tab-licenses').style.display = 'block';
+        document.getElementById('btn-tab-logs').style.display = 'block';
+        document.getElementById('btn-tab-settings').style.display = 'block';
+        showAppTab('users');
+    }
+    
     loadAppWorkspaceData();
 }
 
@@ -303,6 +369,10 @@ function showAppTab(tab) {
 
 async function loadUsers() {
     const token = localStorage.getItem('token');
+    const isReseller = localStorage.getItem('user_role') === 'reseller';
+    const perms = isReseller ? JSON.parse(localStorage.getItem('reseller_perms') || '{}') : null;
+    const canReset = !isReseller || (perms && perms.can_reset_hwid);
+
     try {
         const res = await fetch(`${API_URL}/apps/${currentAppId}/users`, {
             headers: {'Authorization': `Bearer ${token}`}
@@ -312,6 +382,7 @@ async function loadUsers() {
         let html = '<table class="pro-table" id="user-table"><tr><th>User</th><th>Last IP</th><th>HWID</th><th>Status/Lock</th><th>Expires At</th><th>Actions</th></tr>';
         users.forEach(u => {
             let statusBadge = u.status === 'banned' ? '<span style="color:var(--danger);font-size:12px;border:1px solid var(--danger);padding:2px 4px;border-radius:4px;">BANNED</span>' : '';
+            const resetBtnHtml = canReset ? `<button class="action-btn icon-btn" onclick="resetUserHWID(${u.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>` : '';
             html += `<tr>
                 <td>${u.username} <button onclick="copyToClipboard('${u.username}')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0;width:auto;margin:0 5px;box-shadow:none;"><i class="fas fa-copy"></i></button></td>
                 <td><span style="color:var(--primary); font-family:monospace;">${u.last_ip || 'Never'}</span></td>
@@ -320,7 +391,7 @@ async function loadUsers() {
                 <td>${u.expires_at}</td>
                 <td>
                     <button class="action-btn icon-btn" onclick="toggleBanUser(${u.id})" title="Ban/Unban"><i class="fas fa-gavel"></i></button>
-                    <button class="action-btn icon-btn" onclick="resetUserHWID(${u.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>
+                    ${resetBtnHtml}
                     <button class="action-btn icon-btn danger-btn" onclick="deleteUser(${u.id})" title="Delete User"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>`;
@@ -333,6 +404,10 @@ async function loadUsers() {
 
 async function loadLicenses() {
     const token = localStorage.getItem('token');
+    const isReseller = localStorage.getItem('user_role') === 'reseller';
+    const perms = isReseller ? JSON.parse(localStorage.getItem('reseller_perms') || '{}') : null;
+    const canReset = !isReseller || (perms && perms.can_reset_hwid);
+
     try {
         const res = await fetch(`${API_URL}/apps/${currentAppId}/licenses`, {
             headers: {'Authorization': `Bearer ${token}`}
@@ -342,6 +417,7 @@ async function loadLicenses() {
         let html = '<table class="pro-table" id="license-table"><tr><th>Key</th><th>Last IP</th><th>Status/Lock</th><th>Duration</th><th>Expires</th><th>Actions</th></tr>';
         licenses.forEach(l => {
             let statusBadge = l.status === 'banned' ? '<span style="color:var(--danger);font-size:12px;border:1px solid var(--danger);padding:2px 4px;border-radius:4px;">BANNED</span>' : '';
+            const resetBtnHtml = canReset ? `<button class="action-btn icon-btn" onclick="resetLicenseHWID(${l.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>` : '';
             html += `<tr>
                 <td><span style="font-family:monospace; color:var(--primary);">${l.license_key}</span> <button onclick="copyToClipboard('${l.license_key}')" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;padding:0;width:auto;margin:0 5px;box-shadow:none;"><i class="fas fa-copy"></i></button></td>
                 <td><span style="font-family:monospace;">${l.last_ip || 'Never'}</span></td>
@@ -350,7 +426,7 @@ async function loadLicenses() {
                 <td>${l.expires_at}</td>
                 <td>
                     <button class="action-btn icon-btn" onclick="toggleBanLicense(${l.id})" title="Ban/Unban"><i class="fas fa-gavel"></i></button>
-                    <button class="action-btn icon-btn" onclick="resetLicenseHWID(${l.id})" title="Reset HWID"><i class="fas fa-undo"></i></button>
+                    ${resetBtnHtml}
                     <button class="action-btn icon-btn danger-btn" onclick="deleteLicense(${l.id})" title="Delete License"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>`;
@@ -1087,4 +1163,278 @@ function switchDiscordSubTab(subTabId) {
         activeBtn.style.color = 'white';
         activeBtn.style.borderBottom = '2px solid var(--primary)';
     }
+}
+
+// --- Reseller System Frontend Logic ---
+
+function switchLoginType(type) {
+    const creatorBtn = document.getElementById('toggle-creator-btn');
+    const resellerBtn = document.getElementById('toggle-reseller-btn');
+    const creatorContainer = document.getElementById('creator-login-container');
+    const resellerContainer = document.getElementById('reseller-login-container');
+    
+    if (type === 'creator') {
+        creatorBtn.style.background = 'var(--primary)';
+        creatorBtn.style.color = 'white';
+        resellerBtn.style.background = 'transparent';
+        resellerBtn.style.color = 'var(--text-muted)';
+        creatorContainer.style.display = 'flex';
+        resellerContainer.style.display = 'none';
+    } else {
+        resellerBtn.style.background = 'var(--primary)';
+        resellerBtn.style.color = 'white';
+        creatorBtn.style.background = 'transparent';
+        creatorBtn.style.color = 'var(--text-muted)';
+        creatorContainer.style.display = 'none';
+        resellerContainer.style.display = 'flex';
+    }
+}
+
+async function handleResellerLogin() {
+    const usernameInput = document.getElementById('reseller-username');
+    const passwordInput = document.getElementById('reseller-password');
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!username || !password) {
+        return showToast('Username and password are required', 'error');
+    }
+    
+    try {
+        const res = await fetch('/api/reseller/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            localStorage.setItem('token', data.access_token);
+            localStorage.setItem('user_role', 'reseller');
+            localStorage.setItem('reseller_perms', JSON.stringify(data.permissions));
+            localStorage.setItem('email', username);
+            showToast('Logged in as Reseller', 'success');
+            
+            usernameInput.value = '';
+            passwordInput.value = '';
+            
+            showDashboard();
+        } else {
+            showToast(data.detail || 'Reseller Login failed', 'error');
+        }
+    } catch(e) {
+        showToast('Error communicating with server during Reseller login', 'error');
+    }
+}
+
+async function loadResellers() {
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch('/api/creator/resellers', {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (!res.ok) throw new Error();
+        const resellers = await res.json();
+        
+        const container = document.getElementById('resellers-list-container');
+        if (!container) return;
+        
+        if (resellers.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No reseller profiles created yet.</p>';
+            return;
+        }
+        
+        let html = `
+            <table class="pro-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Allowed Apps</th>
+                        <th>Permissions</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        resellers.forEach(r => {
+            const appNames = r.allowed_apps.map(appId => {
+                const app = currentApps.find(a => a.id === appId);
+                return app ? app.app_name : `App ID ${appId}`;
+            }).join(', ') || 'None';
+            
+            const perms = [];
+            if (r.can_view_secret) perms.push('View Secret');
+            if (r.can_manage_users) perms.push('Manage Users');
+            if (r.can_manage_licenses) perms.push('Manage Licenses');
+            if (r.can_reset_hwid) perms.push('HWID Reset');
+            if (r.can_view_logs) perms.push('View Logs');
+            const permText = perms.join(', ') || 'No Permissions';
+            
+            const dateStr = new Date(r.created_at).toLocaleDateString();
+            
+            html += `
+                <tr>
+                    <td><strong>${r.username}</strong></td>
+                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${appNames}</td>
+                    <td style="color: var(--primary); font-size: 13px;">${permText}</td>
+                    <td>${dateStr}</td>
+                    <td>
+                        <button class="action-btn icon-btn" onclick="editReseller(${r.id}, '${r.username}', [${r.allowed_apps.join(',')}], ${r.can_view_secret}, ${r.can_manage_users}, ${r.can_manage_licenses}, ${r.can_reset_hwid}, ${r.can_view_logs})" title="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="action-btn icon-btn danger-btn" onclick="deleteReseller(${r.id})" title="Delete"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch(e) {
+        showToast('Error loading resellers list', 'error');
+    }
+}
+
+async function loadResellerAppCheckboxes() {
+    const container = document.getElementById('reseller-app-checkboxes');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    if (currentApps.length === 0) {
+        container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">No applications available to select.</span>';
+        return;
+    }
+    
+    currentApps.forEach(app => {
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '8px';
+        label.style.color = 'var(--text-muted)';
+        label.style.cursor = 'pointer';
+        label.innerHTML = `<input type="checkbox" name="reseller-apps" value="${app.id}" style="width: 16px; height: 16px; cursor: pointer;"> ${app.app_name}`;
+        container.appendChild(label);
+    });
+}
+
+async function saveReseller() {
+    const editId = document.getElementById('edit-reseller-id').value;
+    const username = document.getElementById('reseller-form-username').value.trim();
+    const password = document.getElementById('reseller-form-password').value;
+    
+    if (!username) {
+        return showToast('Reseller username cannot be empty', 'error');
+    }
+    if (!editId && !password) {
+        return showToast('Password is required for new resellers', 'error');
+    }
+    
+    const allowedApps = [];
+    document.querySelectorAll('input[name="reseller-apps"]:checked').forEach(cb => {
+        allowedApps.push(parseInt(cb.value));
+    });
+    
+    const payload = {
+        username: username,
+        password: password || null,
+        allowed_apps: allowedApps,
+        can_view_secret: document.getElementById('perm-view-secret').checked,
+        can_manage_users: document.getElementById('perm-manage-users').checked,
+        can_manage_licenses: document.getElementById('perm-manage-licenses').checked,
+        can_reset_hwid: document.getElementById('perm-reset-hwid').checked,
+        can_view_logs: document.getElementById('perm-view-logs').checked
+    };
+    
+    const token = localStorage.getItem('token');
+    const method = editId ? 'PUT' : 'POST';
+    const url = editId ? `/api/creator/resellers/${editId}` : '/api/creator/resellers';
+    
+    try {
+        const res = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+            showToast(editId ? 'Reseller profile updated!' : 'Reseller profile created!', 'success');
+            clearResellerForm();
+            loadResellers();
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Failed to save reseller profile', 'error');
+        }
+    } catch(e) {
+        showToast('Error communicating with server', 'error');
+    }
+}
+
+function editReseller(id, username, allowedApps, viewSecret, manageUsers, manageLicenses, resetHwid, viewLogs) {
+    document.getElementById('edit-reseller-id').value = id;
+    
+    const nameInput = document.getElementById('reseller-form-username');
+    nameInput.value = username;
+    nameInput.disabled = true;
+    
+    document.getElementById('reseller-form-password').placeholder = 'Enter new password to change';
+    document.getElementById('reseller-form-pass-hint').style.display = 'inline';
+    
+    document.querySelectorAll('input[name="reseller-apps"]').forEach(cb => {
+        cb.checked = allowedApps.includes(parseInt(cb.value));
+    });
+    
+    document.getElementById('perm-view-secret').checked = viewSecret;
+    document.getElementById('perm-manage-users').checked = manageUsers;
+    document.getElementById('perm-manage-licenses').checked = manageLicenses;
+    document.getElementById('perm-reset-hwid').checked = resetHwid;
+    document.getElementById('perm-view-logs').checked = viewLogs;
+    
+    document.getElementById('reseller-form-title').innerHTML = `<i class="fas fa-user-edit" style="color: var(--primary); margin-right: 8px;"></i>Edit Reseller Profile (${username})`;
+    document.getElementById('btn-cancel-reseller-edit').style.display = 'inline-block';
+}
+
+async function deleteReseller(id) {
+    if (!confirm('Are you sure you want to delete this reseller profile?')) return;
+    
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`/api/creator/resellers/${id}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            showToast('Reseller profile deleted', 'info');
+            loadResellers();
+        } else {
+            const data = await res.json();
+            showToast(data.detail || 'Failed to delete reseller', 'error');
+        }
+    } catch(e) {
+        showToast('Error deleting reseller', 'error');
+    }
+}
+
+function clearResellerForm() {
+    document.getElementById('edit-reseller-id').value = '';
+    
+    const nameInput = document.getElementById('reseller-form-username');
+    nameInput.value = '';
+    nameInput.disabled = false;
+    
+    document.getElementById('reseller-form-password').value = '';
+    document.getElementById('reseller-form-password').placeholder = 'e.g. password123';
+    document.getElementById('reseller-form-pass-hint').style.display = 'none';
+    
+    document.querySelectorAll('input[name="reseller-apps"]').forEach(cb => cb.checked = false);
+    
+    document.getElementById('perm-view-secret').checked = false;
+    document.getElementById('perm-manage-users').checked = false;
+    document.getElementById('perm-manage-licenses').checked = false;
+    document.getElementById('perm-reset-hwid').checked = false;
+    document.getElementById('perm-view-logs').checked = false;
+    
+    document.getElementById('reseller-form-title').innerHTML = '<i class="fas fa-user-plus" style="color: var(--primary); margin-right: 8px;"></i>Create New Reseller Profile';
+    document.getElementById('btn-cancel-reseller-edit').style.display = 'none';
 }

@@ -58,6 +58,7 @@ class Creator(Base):
     # Relationships
     applications = relationship("Application", back_populates="creator", cascade="all, delete-orphan")
     otps = relationship("OTP", back_populates="creator", cascade="all, delete-orphan")
+    resellers = relationship("Reseller", back_populates="creator", cascade="all, delete-orphan")
 
 class OTP(Base):
     __tablename__ = "otps"
@@ -147,6 +148,27 @@ class AppLicense(Base):
 
     # Relationships
     application = relationship("Application", back_populates="licenses")
+
+class Reseller(Base):
+    __tablename__ = "resellers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    creator_id = Column(Integer, ForeignKey("creators.id", ondelete="CASCADE"), nullable=False)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    password_hash = Column(String(200), nullable=False)
+    allowed_apps = Column(String, nullable=True) # Comma-separated string of app IDs
+    
+    # Permissions
+    can_view_secret = Column(Boolean, default=False)
+    can_manage_users = Column(Boolean, default=False)
+    can_manage_licenses = Column(Boolean, default=False)
+    can_reset_hwid = Column(Boolean, default=False)
+    can_view_logs = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    creator = relationship("Creator", back_populates="resellers")
 
 def init_db():
     Base.metadata.create_all(bind=engine)
