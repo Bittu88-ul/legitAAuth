@@ -4,7 +4,19 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
-DATABASE_URL = os.environ.get("postgresql://neondb_owner:password@ep-xxxxx.us-east-2.aws.neon.tech/neondb?sslmode=require", "sqlite:///./auth_system.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    sqlite_path = os.path.join(BASE_DIR, "auth_system.db")
+    # Auto-migrate/copy root auth_system.db if the backend one is uninitialized
+    root_db = os.path.join(os.path.dirname(BASE_DIR), "auth_system.db")
+    if os.path.exists(root_db) and (not os.path.exists(sqlite_path) or os.path.getsize(sqlite_path) == 0):
+        try:
+            import shutil
+            shutil.copy2(root_db, sqlite_path)
+        except Exception:
+            pass
+    DATABASE_URL = f"sqlite:///{sqlite_path}"
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
