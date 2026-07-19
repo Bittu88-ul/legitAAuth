@@ -143,11 +143,9 @@ async function loadApps() {
         
         const list = document.getElementById('app-list');
         const selector = document.getElementById('app-selector');
-        const discordSelector = document.getElementById('discord-app-selector');
         
         list.innerHTML = '';
         if (selector) selector.innerHTML = '<option value="">-- Select an App --</option>';
-        if (discordSelector) discordSelector.innerHTML = '<option value="">-- Select an App to Integrate --</option>';
         
         // Update Dashboard Stats
         document.getElementById('stat-apps').innerText = apps.length;
@@ -748,7 +746,6 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-section-selector').innerHTML = '<option value="">-- Choose Section --</option>';
         document.getElementById('discord-role-selector').innerHTML = '<option value="">-- Choose Role --</option>';
         await setBotInviteLink('discord-invite-link');
         return;
@@ -761,9 +758,8 @@ async function onDiscordGuildSelect(guildId) {
     await setBotInviteLink('discord-invite-link', guildId);
     await setBotInviteLink('btn-step2', guildId);
     
-    // Load channels, sections, and roles
+    // Load channels and roles
     await loadDiscordGuildChannels(guildId);
-    await loadDiscordGuildSections(guildId);
     await loadDiscordGuildRoles(guildId);
 }
 
@@ -799,8 +795,9 @@ async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
 }
 
 async function loadDiscordGuildSections(guildId, selectedSectionId = null) {
-    const token = localStorage.getItem('token');
     const selector = document.getElementById('discord-section-selector');
+    if (!selector) return;
+    const token = localStorage.getItem('token');
     selector.innerHTML = '<option value="">-- Loading Sections --</option>';
     
     try {
