@@ -52,6 +52,8 @@ class Creator(Base):
     discord_member_reset_enabled = Column(Boolean, default=False)
     discord_login_log_enabled = Column(Boolean, default=False)
     discord_embed_color = Column(String, default="#00FFAA")
+    discord_allowed_roles = Column(String, nullable=True)
+    bot_enabled = Column(Boolean, default=True)
 
     # Relationships
     applications = relationship("Application", back_populates="creator", cascade="all, delete-orphan")
@@ -92,6 +94,8 @@ class Application(Base):
     discord_role_name = Column(String, nullable=True)
     discord_section_id = Column(String, nullable=True)
     discord_section_name = Column(String, nullable=True)
+    discord_allowed_roles = Column(String, nullable=True)
+    bot_enabled = Column(Boolean, default=True)
 
     # Relationships
     creator = relationship("Creator", back_populates="applications")
@@ -252,6 +256,30 @@ def init_db():
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE creators ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT 1"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_allowed_roles VARCHAR"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE creators ADD COLUMN bot_enabled BOOLEAN DEFAULT 1"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_allowed_roles VARCHAR"))
+    except Exception:
+        pass
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE applications ADD COLUMN bot_enabled BOOLEAN DEFAULT 1"))
     except Exception:
         pass
 

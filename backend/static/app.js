@@ -867,12 +867,17 @@ async function loadGlobalDiscordConfig() {
         });
         if (res.ok) {
             const config = await res.json();
-            if (config.discord_guild_id && config.discord_channel_id) {
-                statusText.innerText = `Linked to server "${config.discord_guild_name}" in channel #${config.discord_channel_name}`;
-                statusBadge.innerText = 'Active';
-                statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
-                statusBadge.style.color = '#10b981';
-                statusBadge.style.borderColor = '#10b981';
+            if (config.discord_guild_id) {
+                let statusString = `Linked to server "${config.discord_guild_name}"`;
+                if (config.discord_channel_name) {
+                    statusString += ` (Channel: #${config.discord_channel_name})`;
+                }
+                statusText.innerText = statusString;
+                
+                statusBadge.innerText = config.bot_enabled !== false ? 'Active' : 'Disabled';
+                statusBadge.style.background = config.bot_enabled !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                statusBadge.style.color = config.bot_enabled !== false ? '#10b981' : '#ef4444';
+                statusBadge.style.borderColor = config.bot_enabled !== false ? '#10b981' : '#ef4444';
                 unlinkBtn.style.display = 'inline-block';
                 
                 // Populate the guild selector
@@ -889,10 +894,6 @@ async function loadGlobalDiscordConfig() {
                 guildSelector.value = resolvedGuildId;
                 
                 await setBotInviteLink('discord-invite-link', resolvedGuildId);
-                
-                // Load channels and roles
-                await loadDiscordGuildChannels(resolvedGuildId, config.discord_channel_id);
-                await loadDiscordGuildRoles(resolvedGuildId, config.discord_role_id);
             } else {
                 statusText.innerText = 'Not Configured';
                 statusBadge.innerText = 'Inactive';
@@ -901,10 +902,7 @@ async function loadGlobalDiscordConfig() {
                 statusBadge.style.borderColor = '#ef4444';
                 unlinkBtn.style.display = 'none';
                 
-                // Reset dropdowns
                 document.getElementById('discord-guild-selector').value = '';
-                document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-                document.getElementById('discord-role-selector').innerHTML = '<option value="">-- Choose Role --</option>';
             }
 
             // Populate feature configurations in UI
@@ -971,18 +969,6 @@ async function loadDiscordChannels(guildId, selectedChannelId = null) {
 }
 
 async function saveDiscordConfig() {
-    const channelSelector = document.getElementById('discord-channel-selector');
-    const channelId = channelSelector.value;
-    const channelName = channelSelector.options[channelSelector.selectedIndex]?.text.replace('#', '') || '';
-    
-    const roleSelector = document.getElementById('discord-role-selector');
-    const roleId = roleSelector.value;
-    const roleName = roleSelector.options[roleSelector.selectedIndex]?.text.replace('👤 ', '') || '';
-    
-    if (!channelId) {
-        return showToast('Please select an operating channel', 'error');
-    }
-    
     const logEnabled = document.getElementById('discord-log-enabled').checked;
     const loginLogEnabled = document.getElementById('discord-login-log-enabled').checked;
     const memberResetEnabled = document.getElementById('discord-member-reset-enabled').checked;
@@ -995,28 +981,36 @@ async function saveDiscordConfig() {
     
     const token = localStorage.getItem('token');
     try {
+        // Fetch current config to preserve direct config values like allowed channel/roles/enabled status
+        const getRes = await fetch(`${API_URL}/discord/config`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        let currentConfig = {};
+        if (getRes.ok) {
+            currentConfig = await getRes.json();
+        }
+
+        const bodyPayload = {
+            ...currentConfig,
+            discord_guild_id: resolvedGuildId,
+            discord_guild_name: resolvedGuildName,
+            discord_log_enabled: logEnabled,
+            discord_login_log_enabled: loginLogEnabled,
+            discord_member_reset_enabled: memberResetEnabled,
+            discord_embed_color: embedColor,
+            discord_welcome_enabled: welcomeEnabled,
+            discord_welcome_msg: welcomeMsg,
+            discord_role_on_register: roleOnRegister || null,
+            discord_dm_notifications: dmNotifications
+        };
+
         const res = await fetch(`${API_URL}/discord/config`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                discord_guild_id: resolvedGuildId,
-                discord_channel_id: channelId || null,
-                discord_guild_name: resolvedGuildName,
-                discord_channel_name: channelName || null,
-                discord_role_id: roleId || null,
-                discord_role_name: roleName || null,
-                discord_log_enabled: logEnabled,
-                discord_login_log_enabled: loginLogEnabled,
-                discord_member_reset_enabled: memberResetEnabled,
-                discord_embed_color: embedColor,
-                discord_welcome_enabled: welcomeEnabled,
-                discord_welcome_msg: welcomeMsg,
-                discord_role_on_register: roleOnRegister || null,
-                discord_dm_notifications: dmNotifications
-            })
+            body: JSON.stringify(bodyPayload)
         });
         if (res.ok) {
             showToast('Discord configuration saved successfully!', 'success');
@@ -1073,4 +1067,24 @@ async function unlinkDiscordConfig() {
 // Check auth on load
 if (localStorage.getItem('token')) {
     showDashboard();
+}
+
+function switchDiscordSubTab(subTabId) {
+    document.querySelectorAll('.discord-sub-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.color = 'var(--text-muted)';
+        btn.style.borderBottom = '2px solid transparent';
+    });
+    
+    const target = document.getElementById(subTabId);
+    if (target) target.style.display = 'block';
+    
+    const activeBtnId = subTabId.replace('discord-sub', 'btn-sub');
+    const activeBtn = document.getElementById(activeBtnId);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.color = 'white';
+        activeBtn.style.borderBottom = '2px solid var(--primary)';
+    }
 }

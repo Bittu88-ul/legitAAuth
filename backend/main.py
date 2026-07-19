@@ -134,6 +134,8 @@ class DiscordConfigRequest(BaseModel):
     discord_member_reset_enabled: Optional[bool] = False
     discord_login_log_enabled: Optional[bool] = False
     discord_embed_color: Optional[str] = "#00FFAA"
+    discord_allowed_roles: Optional[str] = None
+    bot_enabled: Optional[bool] = True
 
 # --- Authentication Dependency ---
 def get_current_creator(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Creator:
@@ -512,7 +514,9 @@ def get_creator_discord_config(current_creator: Creator = Depends(get_current_cr
         "discord_dm_notifications": current_creator.discord_dm_notifications,
         "discord_member_reset_enabled": current_creator.discord_member_reset_enabled,
         "discord_login_log_enabled": current_creator.discord_login_log_enabled,
-        "discord_embed_color": current_creator.discord_embed_color or "#00FFAA"
+        "discord_embed_color": current_creator.discord_embed_color or "#00FFAA",
+        "discord_allowed_roles": current_creator.discord_allowed_roles,
+        "bot_enabled": current_creator.bot_enabled
     }
 
 @app.put("/api/creator/discord/config")
@@ -531,6 +535,8 @@ def update_creator_discord_config(req: DiscordConfigRequest, current_creator: Cr
     current_creator.discord_member_reset_enabled = req.discord_member_reset_enabled
     current_creator.discord_login_log_enabled = req.discord_login_log_enabled
     current_creator.discord_embed_color = req.discord_embed_color
+    current_creator.discord_allowed_roles = req.discord_allowed_roles
+    current_creator.bot_enabled = req.bot_enabled
     
     # Sync to all apps of this creator
     apps = db.query(Application).filter(Application.creator_id == current_creator.id).all()
@@ -546,6 +552,8 @@ def update_creator_discord_config(req: DiscordConfigRequest, current_creator: Cr
         app.discord_welcome_msg = req.discord_welcome_msg
         app.discord_role_on_register = req.discord_role_on_register
         app.discord_dm_notifications = req.discord_dm_notifications
+        app.discord_allowed_roles = req.discord_allowed_roles
+        app.bot_enabled = req.bot_enabled
         
     db.commit()
     return {"message": "Global Discord configuration updated successfully"}
@@ -581,7 +589,9 @@ def get_app_by_discord_channel(channel_id: str, db: Session = Depends(get_db)):
         "discord_section_name": app.discord_section_name,
         "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
         "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
-        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA",
+        "discord_allowed_roles": app.discord_allowed_roles,
+        "bot_enabled": app.bot_enabled
     }
 
 @app.get("/api/creator/discord/app-by-section/{section_id}")
@@ -615,7 +625,9 @@ def get_app_by_discord_section(section_id: str, db: Session = Depends(get_db)):
         "discord_section_name": app.discord_section_name,
         "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
         "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
-        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA",
+        "discord_allowed_roles": app.discord_allowed_roles,
+        "bot_enabled": app.bot_enabled
     }
 
 @app.get("/api/creator/discord/app-by-guild/{guild_id}")
@@ -649,7 +661,9 @@ def get_app_by_discord_guild(guild_id: str, db: Session = Depends(get_db)):
         "discord_section_name": app.discord_section_name,
         "discord_member_reset_enabled": creator.discord_member_reset_enabled if creator else False,
         "discord_login_log_enabled": creator.discord_login_log_enabled if creator else False,
-        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA"
+        "discord_embed_color": (creator.discord_embed_color if creator else "#00FFAA") or "#00FFAA",
+        "discord_allowed_roles": app.discord_allowed_roles,
+        "bot_enabled": app.bot_enabled
     }
 
 # --- Discord OAuth2 Endpoints ---
