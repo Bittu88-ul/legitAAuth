@@ -279,111 +279,128 @@ private async void btnLoginKey_Click(object sender, EventArgs e)
                 </div>
 
                 <div id="discord-integration-details" style="display:none;">
-                    <!-- Status Card -->
-                    <div class="stat-card" style="margin-bottom: 20px; width: 100%; max-width: 600px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid var(--glass-border); border-radius: 12px;">
-                        <div>
-                            <h4 style="margin: 0; color: var(--text-muted);">Integration Status</h4>
-                            <h3 id="discord-status-text" style="margin: 5px 0 0 0; font-size: 18px; color: white;">Not Configured</h3>
-                        </div>
-                        <span id="discord-status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">Inactive</span>
+                    <!-- Sub-tabs Navigation -->
+                    <div style="display: flex; gap: 15px; margin-bottom: 25px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; width: 100%; max-width: 600px;">
+                        <button class="sub-tab-btn active" id="btn-sub-status" onclick="switchDiscordSubTab('discord-sub-status')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: white; border-bottom: 2px solid var(--primary); border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Status & Server</button>
+                        <button class="sub-tab-btn" id="btn-sub-features" onclick="switchDiscordSubTab('discord-sub-features')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: var(--text-muted); border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Feature Configurations</button>
+                        <button class="sub-tab-btn" id="btn-sub-welcome" onclick="switchDiscordSubTab('discord-sub-welcome')" style="width: auto; padding: 8px 16px; background: transparent; border: none; color: var(--text-muted); border-bottom: 2px solid transparent; border-radius: 0; box-shadow: none; font-weight: bold; cursor: pointer;">Welcome & Customization</button>
                     </div>
 
-                    <!-- Setup Form -->
-                    <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
-                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>1. Link Discord Server & Channel</h3>
-                        
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
-                        <div style="display:flex; gap:10px; margin-bottom:20px;">
-                            <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)" style="padding:10px; flex:1; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">
-                                <option value="">-- Select Server --</option>
-                            </select>
-                            <a id="discord-invite-link" href="#" target="_blank" style="display: inline-flex; align-items:center; gap:8px; text-decoration:none; background:#5865F2; color:white; padding:10px 15px; border-radius:8px; font-weight:bold; font-size:14px; white-space:nowrap;">
-                                <i class="fab fa-discord"></i> Invite Bot
-                            </a>
+                    <!-- Sub-tab 1: Status & Server -->
+                    <div id="discord-sub-status" class="discord-sub-content">
+                        <!-- Status Card -->
+                        <div class="stat-card" style="margin-bottom: 20px; width: 100%; max-width: 600px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 20px; border: 1px solid var(--glass-border); border-radius: 12px;">
+                            <div>
+                                <h4 style="margin: 0; color: var(--text-muted);">Integration Status</h4>
+                                <h3 id="discord-status-text" style="margin: 5px 0 0 0; font-size: 18px; color: white;">Not Configured</h3>
+                            </div>
+                            <span id="discord-status-badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">Inactive</span>
                         </div>
-                        <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
-                            Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
-                            <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
-                        </p>
 
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Operating Channel</label>
-                        <select id="discord-channel-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                            <option value="">-- Choose Channel --</option>
-                        </select>
+                        <!-- Setup Form -->
+                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
+                            <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-plug" style="margin-right: 8px;"></i>Link Discord Server</h3>
+                            
+                            <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Your Server</label>
+                            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                                <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)" style="padding:10px; flex:1; border-radius:8px; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border);">
+                                    <option value="">-- Select Server --</option>
+                                </select>
+                                <a id="discord-invite-link" href="#" target="_blank" style="display: inline-flex; align-items:center; gap:8px; text-decoration:none; background:#5865F2; color:white; padding:10px 15px; border-radius:8px; font-weight:bold; font-size:14px; white-space:nowrap;">
+                                    <i class="fab fa-discord"></i> Invite Bot
+                                </a>
+                            </div>
+                            <p id="discord-setup-hint" style="color:#f59e0b; font-size:12px; margin:-10px 0 15px 0; display:none;">
+                                Discord Developer Portal → OAuth2 → Redirects mein ye URL add karo (exact match):
+                                <code id="discord-redirect-uri" style="color:#fbbf24; word-break:break-all;"></code>
+                            </p>
 
-                        <label style="color: var(--text-muted); font-size: 14px; display: block; margin-bottom: 8px;">Select Required Role for Commands</label>
-                        <select id="discord-role-selector" style="padding: 10px; width: 100%; border-radius: 8px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border); margin-bottom: 20px;">
-                            <option value="">-- Choose Role --</option>
-                        </select>
-
-                        <div style="display: flex; gap: 10px;">
-                            <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Configuration</button>
-                            <button onclick="unlinkDiscordConfig()" id="discord-unlink-btn" style="display: none; width: auto; padding: 10px 20px; margin: 0; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;"><i class="fas fa-unlink"></i> Unlink</button>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Server Link</button>
+                                <button onclick="unlinkDiscordConfig()" id="discord-unlink-btn" style="display: none; width: auto; padding: 10px 20px; margin: 0; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;"><i class="fas fa-unlink"></i> Unlink</button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Bot Features Configuration Form -->
-                    <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px; margin-top: 20px;">
-                        <h3 style="margin-bottom: 15px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>2. Bot Feature Configurations</h3>
-                        
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                            <div>
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Live Console logs to Discord</label>
-                                <span style="color: var(--text-muted); font-size: 12px;">Sends log events (registers, claims, resets) directly to the linked Discord channel.</span>
+                    <!-- Sub-tab 2: Feature Configurations -->
+                    <div id="discord-sub-features" class="discord-sub-content" style="display: none;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
+                            <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-robot" style="margin-right: 8px;"></i>Bot Feature Configurations</h3>
+                            
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                                <div>
+                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Live Console logs to Discord</label>
+                                    <span style="color: var(--text-muted); font-size: 12px;">Sends log events (registers, claims, resets) directly to the linked Discord channel.</span>
+                                </div>
+                                <input type="checkbox" id="discord-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
                             </div>
-                            <input type="checkbox" id="discord-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                        </div>
 
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <div>
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Log Client Logins to Channel</label>
-                                <span style="color: var(--text-muted); font-size: 12px;">Sends a real-time login alert (IP, App) to your selected Discord channel.</span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <div>
+                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Log Client Logins to Channel</label>
+                                    <span style="color: var(--text-muted); font-size: 12px;">Sends a real-time login alert (IP, App) to your selected Discord channel.</span>
+                                </div>
+                                <input type="checkbox" id="discord-login-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
                             </div>
-                            <input type="checkbox" id="discord-login-log-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                        </div>
 
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <div>
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Customer HWID Self-Reset</label>
-                                <span style="color: var(--text-muted); font-size: 12px;">Allows customers to reset their own HWID using `/hwid_reset` or `/license_reset`.</span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <div>
+                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Customer HWID Self-Reset</label>
+                                    <span style="color: var(--text-muted); font-size: 12px;">Allows customers to reset their own HWID using `/hwid_reset` or `/license_reset`.</span>
+                                </div>
+                                <input type="checkbox" id="discord-member-reset-enabled" style="width: 20px; height: 20px; cursor: pointer;">
                             </div>
-                            <input type="checkbox" id="discord-member-reset-enabled" style="width: 20px; height: 20px; cursor: pointer;">
-                        </div>
-
-                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <label style="color: white; font-size: 14px; font-weight: bold; display: block; margin-bottom: 8px;">Bot Embed Theme Color</label>
-                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Select or type a color for the bot's embed messages.</span>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="color" id="discord-embed-color-picker" oninput="document.getElementById('discord-embed-color').value = this.value" style="width: 50px; height: 40px; border: none; padding: 0; background: transparent; cursor: pointer; border-radius: 8px;">
-                                <input type="text" id="discord-embed-color" placeholder="#00FFAA" style="margin: 0; flex: 1; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);" oninput="document.getElementById('discord-embed-color-picker').value = this.value">
+                            
+                            <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Features</button>
                             </div>
                         </div>
+                    </div>
 
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <div>
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Enable Server Welcome System</label>
-                                <span style="color: var(--text-muted); font-size: 12px;">Welcome new members who join the Discord server.</span>
+                    <!-- Sub-tab 3: Welcome & Customization -->
+                    <div id="discord-sub-welcome" class="discord-sub-content" style="display: none;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 25px; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 600px;">
+                            <h3 style="margin-bottom: 20px; color: white;"><i class="fas fa-palette" style="margin-right: 8px;"></i>Welcome & Customization</h3>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block; margin-bottom: 8px;">Bot Embed Theme Color</label>
+                                <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Select or type a color for the bot's embed messages.</span>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <input type="color" id="discord-embed-color-picker" oninput="document.getElementById('discord-embed-color').value = this.value" style="width: 50px; height: 40px; border: none; padding: 0; background: transparent; cursor: pointer; border-radius: 8px;">
+                                    <input type="text" id="discord-embed-color" placeholder="#00FFAA" style="margin: 0; flex: 1; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);" oninput="document.getElementById('discord-embed-color-picker').value = this.value">
+                                </div>
                             </div>
-                            <input type="checkbox" id="discord-welcome-enabled" style="width: 20px; height: 20px; cursor: pointer;" onchange="toggleWelcomeInput(this.checked)">
-                        </div>
 
-                        <div id="discord-welcome-msg-container" style="margin-bottom: 15px; display: none;">
-                            <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Custom Welcome Message</label>
-                            <input type="text" id="discord-welcome-msg" placeholder="Welcome to our server!" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        </div>
-
-                        <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Auto-Assign Role on Register</label>
-                            <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Role ID to assign when a member registers using `/register`. Leave empty to disable.</span>
-                            <input type="text" id="discord-role-on-register" placeholder="Role ID (e.g., 102435789123456789)" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
-                        </div>
-
-                        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                            <div>
-                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Direct Message (DM) Notifications</label>
-                                <span style="color: var(--text-muted); font-size: 12px;">Sends registration and reset confirmation details in direct messages.</span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <div>
+                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Enable Server Welcome System</label>
+                                    <span style="color: var(--text-muted); font-size: 12px;">Welcome new members who join the Discord server.</span>
+                                </div>
+                                <input type="checkbox" id="discord-welcome-enabled" style="width: 20px; height: 20px; cursor: pointer;" onchange="toggleWelcomeInput(this.checked)">
                             </div>
-                            <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
+
+                            <div id="discord-welcome-msg-container" style="margin-bottom: 15px; display: none;">
+                                <label style="color: var(--text-muted); font-size: 13px; display: block; margin-bottom: 5px;">Custom Welcome Message</label>
+                                <input type="text" id="discord-welcome-msg" placeholder="Welcome to our server!" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                            </div>
+
+                            <div style="margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Auto-Assign Role on Register</label>
+                                <span style="color: var(--text-muted); font-size: 12px; display: block; margin-bottom: 8px;">Role ID to assign when a member registers using `/register`. Leave empty to disable.</span>
+                                <input type="text" id="discord-role-on-register" placeholder="Role ID (e.g., 102435789123456789)" style="margin: 0; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--glass-border);">
+                            </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <div>
+                                    <label style="color: white; font-size: 14px; font-weight: bold; display: block;">Direct Message (DM) Notifications</label>
+                                    <span style="color: var(--text-muted); font-size: 12px;">Sends registration and reset confirmation details in direct messages.</span>
+                                </div>
+                                <input type="checkbox" id="discord-dm-notifications" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            </div>
+                            
+                            <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                                <button onclick="saveDiscordConfig()" style="width: auto; padding: 10px 20px; margin: 0; background: var(--success);"><i class="fas fa-save"></i> Save Settings</button>
+                            </div>
                         </div>
                     </div>
                 </div>

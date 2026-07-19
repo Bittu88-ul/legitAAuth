@@ -135,11 +135,16 @@ def get_current_app(interaction: discord.Interaction):
 
 @tree.interaction_check
 async def global_interaction_check(interaction: discord.Interaction) -> bool:
-    # Setup / system linking commands are bypassed
+    # Setup / system linking and configuration commands bypass the restrictions so the owner can always set it up
     bypass_commands = ["link_token", "unlink_token"]
-    if interaction.command and interaction.command.name in bypass_commands:
-        return True
-        
+    if interaction.command:
+        # Bypass setup commands
+        if interaction.command.name in bypass_commands:
+            return True
+        # Bypass config group subcommands (so owner can configure bot)
+        if interaction.command.parent and interaction.command.parent.name == "config":
+            return True
+            
     if not interaction.guild_id:
         # In DMs, allow commands to run
         return True
@@ -150,23 +155,26 @@ async def global_interaction_check(interaction: discord.Interaction) -> bool:
         resp = requests.get(url, headers=api_headers())
         if resp.status_code == 200:
             app = resp.json()
-            chan_id = app.get("discord_channel_id")
-            role_id = app.get("discord_role_id")
             
-            # Channel restriction check
-            if chan_id and str(interaction.channel_id) != str(chan_id):
-                await interaction.response.send_message("❌ This bot is restricted to a specific channel and cannot reply here.", ephemeral=True)
-                return False
+            # Check 1: Bot Enabled
+            if app.get("bot_enabled") == False:
+                return False  # Ignore silently
                 
-            # Role restriction check
-            if role_id:
-                if not isinstance(interaction.user, discord.Member):
-                    await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
-                    return False
-                user_role_ids = [str(r.id) for r in interaction.user.roles]
-                if str(role_id) not in user_role_ids:
-                    await interaction.response.send_message("❌ You do not have the required role to use this bot.", ephemeral=True)
-                    return False
+            # Check 2: Allowed Channel restriction check
+            chan_id = app.get("discord_channel_id")
+            if chan_id and str(interaction.channel_id) != str(chan_id):
+                return False  # Ignore silently
+                
+            # Check 3: Allowed Roles check
+            allowed_roles_str = app.get("discord_allowed_roles")
+            if allowed_roles_str:
+                allowed_roles = [r.strip() for r in allowed_roles_str.split(",") if r.strip()]
+                if allowed_roles:
+                    if not isinstance(interaction.user, discord.Member):
+                        return False
+                    user_role_ids = [str(r.id) for r in interaction.user.roles]
+                    if not any(r_id in user_role_ids for r_id in allowed_roles):
+                        return False  # Ignore silently
     except Exception as e:
         print(f"Error during global checks: {e}")
         
@@ -865,6 +873,209 @@ async def license_reset(interaction: discord.Interaction, license_key: str, app_
     else:
         err = resp.json().get("detail", "Failed to reset HWID. Please check key or contact administrator.")
         await interaction.response.send_message(f"❌ {err}", ephemeral=True)
+
+
+async def is_bot_owner(interaction: discord.Interaction) -> bool:
+    if client.owner_id:
+        return interaction.user.id == client.owner_id
+    try:
+        app_info = await client.application_info()
+        if app_info.team:
+            return any(member.id == interaction.user.id for member in app_info.team.members)
+        return app_info.owner.id == interaction.user.id
+    except Exception as e:
+        print(f"Error checking bot owner: {e}")
+        return False
+
+# owner-only slash command group named /config
+config_group = app_commands.Group(name="config", description="Configure Discord bot settings (Owner-only)")
+
+@config_group.command(name="set-channel", description="Set the current channel as the allowed operating channel")
+async def set_channel(interaction: discord.Interaction):
+    if not await is_bot_owner(interaction):
+        return  # Ignore silently
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    config["discord_channel_id"] = str(interaction.channel_id)
+    config["discord_channel_name"] = interaction.channel.name
+    config["discord_guild_id"] = str(interaction.guild_id)
+    config["discord_guild_name"] = interaction.guild.name
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ Command channel updated.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to update command channel.", ephemeral=True)
+
+@config_group.command(name="remove-channel", description="Remove the allowed operating channel restriction")
+async def remove_channel(interaction: discord.Interaction):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    config["discord_channel_id"] = None
+    config["discord_channel_name"] = None
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ Command channel removed.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to remove command channel.", ephemeral=True)
+
+@config_group.command(name="set-role", description="Add an allowed role that can execute bot commands")
+@app_commands.describe(role="The Discord role to allow")
+async def set_role(interaction: discord.Interaction, role: discord.Role):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    current_roles = [r.strip() for r in (config.get("discord_allowed_roles") or "").split(",") if r.strip()]
+    role_id_str = str(role.id)
+    if role_id_str not in current_roles:
+        current_roles.append(role_id_str)
+        
+    config["discord_allowed_roles"] = ",".join(current_roles)
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message(f"✅ Allowed role updated.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to add allowed role.", ephemeral=True)
+
+@config_group.command(name="remove-role", description="Remove an allowed role")
+@app_commands.describe(role="The Discord role to remove")
+async def remove_role(interaction: discord.Interaction, role: discord.Role):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    current_roles = [r.strip() for r in (config.get("discord_allowed_roles") or "").split(",") if r.strip()]
+    role_id_str = str(role.id)
+    if role_id_str in current_roles:
+        current_roles.remove(role_id_str)
+        
+    config["discord_allowed_roles"] = ",".join(current_roles) if current_roles else None
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ Allowed role removed.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to remove allowed role.", ephemeral=True)
+
+@config_group.command(name="enable", description="Enable the Discord bot globally")
+async def enable_bot(interaction: discord.Interaction):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    config["bot_enabled"] = True
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ Bot enabled.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to enable bot.", ephemeral=True)
+
+@config_group.command(name="disable", description="Disable the Discord bot globally (all commands will be ignored)")
+async def disable_bot(interaction: discord.Interaction):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    config["bot_enabled"] = False
+    
+    url_put = f"{API_BASE}/api/creator/discord/config"
+    resp_put = requests.put(url_put, json=config, headers=api_headers())
+    if resp_put.status_code == 200:
+        await interaction.response.send_message("✅ Bot disabled.", ephemeral=True)
+    else:
+        await interaction.response.send_message("❌ Failed to disable bot.", ephemeral=True)
+
+@config_group.command(name="info", description="Display current bot configuration info")
+async def config_info(interaction: discord.Interaction):
+    if not await is_bot_owner(interaction):
+        return
+        
+    url_get = f"{API_BASE}/api/creator/discord/config"
+    resp_get = requests.get(url_get, headers=api_headers())
+    if resp_get.status_code != 200:
+        await interaction.response.send_message("❌ Failed to fetch configuration info.", ephemeral=True)
+        return
+        
+    config = resp_get.json()
+    
+    status_text = "Enabled" if config.get("bot_enabled") != False else "Disabled"
+    channel_text = f"<#{config['discord_channel_id']}>" if config.get("discord_channel_id") else "Any Channel"
+    
+    allowed_role_ids = [r.strip() for r in (config.get("discord_allowed_roles") or "").split(",") if r.strip()]
+    if allowed_role_ids:
+        roles_list = []
+        for r_id in allowed_role_ids:
+            role = interaction.guild.get_role(int(r_id))
+            if role:
+                roles_list.append(role.name)
+            else:
+                roles_list.append(f"Role ({r_id})")
+        roles_text = ", ".join(roles_list)
+    else:
+        roles_text = "Everyone (No Role Limit)"
+        
+    app_info = await client.application_info()
+    bot_owner_name = app_info.team.name if app_info.team else app_info.owner.name
+    bot_owner_id = app_info.team.id if app_info.team else app_info.owner.id
+
+    color_val = get_embed_color(config)
+    embed = discord.Embed(title="⚙️ Discord Bot Settings Overview", color=color_val)
+    embed.add_field(name="Bot Status", value=status_text, inline=True)
+    embed.add_field(name="Channel", value=channel_text, inline=True)
+    embed.add_field(name="Allowed Roles", value=roles_text, inline=False)
+    embed.add_field(name="Guild ID", value=str(interaction.guild_id), inline=True)
+    embed.add_field(name="Owner ID", value=str(bot_owner_id) + f" ({bot_owner_name})", inline=True)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+tree.add_command(config_group)
 
 
 # Welcome new members handler
