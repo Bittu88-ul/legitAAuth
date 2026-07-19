@@ -135,14 +135,10 @@ def get_current_app(interaction: discord.Interaction):
 
 @tree.interaction_check
 async def global_interaction_check(interaction: discord.Interaction) -> bool:
-    # Setup / system linking and configuration commands bypass the restrictions so the owner can always set it up
+    # Setup / system linking commands bypass the restrictions so the owner can always link the server first
     bypass_commands = ["link_token", "unlink_token"]
     if interaction.command:
-        # Bypass setup commands
         if interaction.command.name in bypass_commands:
-            return True
-        # Bypass config group subcommands (so owner can configure bot)
-        if interaction.command.parent and interaction.command.parent.name == "config":
             return True
             
     if not interaction.guild_id:
@@ -156,6 +152,10 @@ async def global_interaction_check(interaction: discord.Interaction) -> bool:
         if resp.status_code == 200:
             app = resp.json()
             
+            # Bypass config group subcommands so the guild owner can configure it once the server is linked
+            if interaction.command and interaction.command.parent and interaction.command.parent.name == "config":
+                return True
+                
             # Check 1: Bot Enabled
             if app.get("bot_enabled") == False:
                 return False  # Ignore silently
@@ -175,8 +175,12 @@ async def global_interaction_check(interaction: discord.Interaction) -> bool:
                     user_role_ids = [str(r.id) for r in interaction.user.roles]
                     if not any(r_id in user_role_ids for r_id in allowed_roles):
                         return False  # Ignore silently
+        else:
+            # If guild is not linked (404) or API error, ignore all commands silently (except link/unlink token)
+            return False
     except Exception as e:
         print(f"Error during global checks: {e}")
+        return False  # Block on exception to prevent bypasses
         
     return True
 
