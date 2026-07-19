@@ -558,6 +558,80 @@ def update_creator_discord_config(req: DiscordConfigRequest, current_creator: Cr
     db.commit()
     return {"message": "Global Discord configuration updated successfully"}
 
+@app.get("/api/creator/discord/config-by-guild/{guild_id}")
+def get_config_by_guild(guild_id: str, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.discord_guild_id == guild_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Guild not linked to any application")
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    if not creator:
+        raise HTTPException(status_code=404, detail="Creator not found")
+        
+    return {
+        "discord_guild_id": creator.discord_guild_id,
+        "discord_guild_name": creator.discord_guild_name,
+        "discord_channel_id": creator.discord_channel_id,
+        "discord_channel_name": creator.discord_channel_name,
+        "discord_role_id": creator.discord_role_id,
+        "discord_role_name": creator.discord_role_name,
+        "discord_log_enabled": creator.discord_log_enabled,
+        "discord_welcome_enabled": creator.discord_welcome_enabled,
+        "discord_welcome_msg": creator.discord_welcome_msg,
+        "discord_role_on_register": creator.discord_role_on_register,
+        "discord_dm_notifications": creator.discord_dm_notifications,
+        "discord_member_reset_enabled": creator.discord_member_reset_enabled,
+        "discord_login_log_enabled": creator.discord_login_log_enabled,
+        "discord_embed_color": creator.discord_embed_color or "#00FFAA",
+        "discord_allowed_roles": creator.discord_allowed_roles,
+        "bot_enabled": creator.bot_enabled
+    }
+
+@app.put("/api/creator/discord/config-by-guild/{guild_id}")
+def update_config_by_guild(guild_id: str, req: DiscordConfigRequest, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.discord_guild_id == guild_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Guild not linked to any application")
+    creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
+    if not creator:
+        raise HTTPException(status_code=404, detail="Creator not found")
+        
+    creator.discord_guild_id = req.discord_guild_id
+    creator.discord_guild_name = req.discord_guild_name
+    creator.discord_channel_id = req.discord_channel_id
+    creator.discord_channel_name = req.discord_channel_name
+    creator.discord_role_id = req.discord_role_id
+    creator.discord_role_name = req.discord_role_name
+    creator.discord_log_enabled = req.discord_log_enabled
+    creator.discord_welcome_enabled = req.discord_welcome_enabled
+    creator.discord_welcome_msg = req.discord_welcome_msg
+    creator.discord_role_on_register = req.discord_role_on_register
+    creator.discord_dm_notifications = req.discord_dm_notifications
+    creator.discord_member_reset_enabled = req.discord_member_reset_enabled
+    creator.discord_login_log_enabled = req.discord_login_log_enabled
+    creator.discord_embed_color = req.discord_embed_color
+    creator.discord_allowed_roles = req.discord_allowed_roles
+    creator.bot_enabled = req.bot_enabled
+    
+    # Sync to all apps of this creator
+    apps = db.query(Application).filter(Application.creator_id == creator.id).all()
+    for a in apps:
+        a.discord_guild_id = req.discord_guild_id
+        a.discord_channel_id = req.discord_channel_id
+        a.discord_guild_name = req.discord_guild_name
+        a.discord_channel_name = req.discord_channel_name
+        a.discord_role_id = req.discord_role_id
+        a.discord_role_name = req.discord_role_name
+        a.discord_log_enabled = req.discord_log_enabled
+        a.discord_welcome_enabled = req.discord_welcome_enabled
+        a.discord_welcome_msg = req.discord_welcome_msg
+        a.discord_role_on_register = req.discord_role_on_register
+        a.discord_dm_notifications = req.discord_dm_notifications
+        a.discord_allowed_roles = req.discord_allowed_roles
+        a.bot_enabled = req.bot_enabled
+        
+    db.commit()
+    return {"message": "Config updated successfully for guild"}
+
 @app.get("/api/creator/discord/app-by-channel/{channel_id}")
 def get_app_by_discord_channel(channel_id: str, db: Session = Depends(get_db)):
     app = db.query(Application).filter(
