@@ -298,10 +298,7 @@
                                 </select>
                             </div>
 
-                            <div class="settings-field">
-                                <label class="glow-label">Discord Webhook (Activation Logs)</label>
-                                <input type="text" id="settings-webhook" placeholder="https://discord.com/api/webhooks/...">
-                            </div>
+
 
                             <div class="settings-field">
                                 <label class="glow-label">Application Version</label>
@@ -504,7 +501,6 @@ private void Form1_Load(object sender, EventArgs e)
                 <div class="sub-tabs-container">
                     <button id="btn-settings-profile" class="sub-tab-btn active" onclick="switchSettingsSubTab('settings-profile')"><i class="fas fa-id-card"></i> Profile Overview</button>
                     <button id="btn-settings-defaults" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-defaults')"><i class="fas fa-gears"></i> App Defaults</button>
-                    <button id="btn-settings-discord" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-discord')"><i class="fab fa-discord"></i> Discord Integration</button>
                     <button id="btn-settings-theme" class="sub-tab-btn" onclick="switchSettingsSubTab('settings-theme')"><i class="fas fa-palette"></i> Accent Theme</button>
                 </div>
 
@@ -513,14 +509,17 @@ private void Form1_Load(object sender, EventArgs e)
                     <div class="glass-panel">
                         <h3><i class="fas fa-user-circle"></i> Profile Credentials</h3>
                         <div class="profile-details-block">
-                            <p class="text-muted">Email Address: <span id="profile-email" class="profile-highlight-text">Loading...</span></p>
-                            <div class="google-auth-badge">
+                            <p class="text-muted"><span id="profile-email-label">Email Address:</span> <span id="profile-email" class="profile-highlight-text">Loading...</span></p>
+                            <div id="profile-google-badge" class="google-auth-badge">
                                 <i class="fab fa-google"></i> Authenticated via Google Workspace
+                            </div>
+                            <div id="profile-reseller-badge" class="google-auth-badge" style="display: none; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--text-highlight);">
+                                <i class="fas fa-user-shield"></i> Authenticated as Reseller Profile
                             </div>
                         </div>
 
                         <!-- Update Profile Form -->
-                        <div class="settings-form-container border-top">
+                        <div id="creator-update-details-form" class="settings-form-container border-top">
                             <h4>Update Account Details</h4>
                             <div class="settings-field">
                                 <label class="glow-label">Creator Full Name</label>
@@ -531,26 +530,6 @@ private void Form1_Load(object sender, EventArgs e)
                                 <input type="password" id="profile-new-password" placeholder="Enter new password (optional)">
                             </div>
                             <button onclick="saveCreatorProfile()" class="glow-btn"><i class="fas fa-user-pen"></i> Update Credentials</button>
-                        </div>
-
-                        <!-- Discord OAuth link configuration -->
-                        <div class="discord-oauth-card border-top">
-                            <h4>Discord Account Verification</h4>
-                            <p class="text-muted">Link your personal Discord account to enable OAuth roles and developer dashboard authorizations.</p>
-                            
-                            <div id="discord-link-status" class="discord-status-panel">
-                                <button onclick="linkDiscordAccount()" class="glow-btn discord-auth-btn"><i class="fab fa-discord"></i> Link Discord Account</button>
-                            </div>
-                            
-                            <div id="discord-linked-status" class="discord-status-panel" style="display: none;">
-                                <div class="discord-user-badge">
-                                    <i class="fab fa-discord discord-logo-icon"></i>
-                                    <div>
-                                        <p class="linked-label">Linked Discord Account</p>
-                                        <h4 id="discord-user-tag">Unknown#0000</h4>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -587,157 +566,11 @@ private void Form1_Load(object sender, EventArgs e)
                             <button onclick="saveSystemDefaults()" class="glow-btn"><i class="fas fa-circle-check"></i> Save Default Config</button>
                         </div>
 
-                        <!-- Developer access token relocated here -->
-                        <div class="dev-token-section border-top">
-                            <h4><i class="fas fa-key"></i> Developer API Token</h4>
-                            <p class="text-muted">Use this token to authenticate external tools (e.g. Discord Licensing Bot) to LegitAuth.</p>
-                            <div class="token-input-row">
-                                <input type="password" id="profile-api-token" readonly autocomplete="new-password">
-                                <button onclick="toggleTokenVisibility()" class="icon-glow-btn" title="Toggle Visibility"><i class="fas fa-eye" id="token-eye-icon"></i></button>
-                                <button onclick="copyText(document.getElementById('profile-api-token').value)" class="icon-glow-btn" title="Copy Token"><i class="fas fa-copy"></i></button>
-                            </div>
-                        </div>
+
                     </div>
                 </div>
 
-                <!-- 5.3 Discord Integration Sub-tab -->
-                <div id="settings-discord" class="settings-sub-content" style="display:none;">
-                    <div id="discord-integration-details" style="display: none;">
-                        <div class="glass-panel discord-status-header">
-                            <div>
-                                <h3>Discord Bot Bot-Logs Link</h3>
-                                <p class="text-muted">Guild Server: <span id="discord-status-text" style="color: white; font-weight: 600;">Not Link Configured</span></p>
-                            </div>
-                            <div>
-                                <span id="discord-status-badge" class="discord-badge">Inactive</span>
-                                <button id="discord-unlink-btn" onclick="unlinkDiscordConfig()" class="unlink-btn" style="display: none;"><i class="fas fa-trash-can"></i> Unlink Bot</button>
-                            </div>
-                        </div>
 
-                        <!-- Bot Setup Form -->
-                        <div class="glass-panel">
-                            <h3>1. Connect Licensing Bot to Server</h3>
-                            <p class="text-muted">Invite the LegitAuth bot to your server to enable automated logs, commands, and self-service features.</p>
-                            
-                            <div class="discord-invite-input-row">
-                                <input type="text" id="discord-invite-input" placeholder="Enter server invite link or code (e.g. https://discord.gg/abc)">
-                                <button onclick="resolveDiscordInvite()" class="glow-btn"><i class="fas fa-magnifying-glass"></i> Resolve Server</button>
-                            </div>
-
-                            <div class="discord-selector-fields">
-                                <div class="settings-field">
-                                    <label class="glow-label">Choose Active Server</label>
-                                    <select id="discord-guild-selector" onchange="onDiscordGuildSelect(this.value)">
-                                        <option value="">-- Choose Guild --</option>
-                                    </select>
-                                </div>
-                                <div class="invite-link-wrapper">
-                                    <a href="#" id="discord-invite-link" target="_blank" class="glow-btn discord-auth-btn"><i class="fas fa-robot"></i> Authorize Bot on Server</a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Bot Sub-categories settings -->
-                        <div class="glass-panel">
-                            <h3>2. Configure Bot Capabilities</h3>
-                            
-                            <div class="sub-tabs-container mini-sub-tabs">
-                                <button id="btn-sub-general" class="sub-tab-btn active" onclick="switchDiscordSubTab('discord-sub-general')">General</button>
-                                <button id="btn-sub-logs" class="sub-tab-btn" onclick="switchDiscordSubTab('discord-sub-logs')">Logging Channels</button>
-                                <button id="btn-sub-welcome" class="sub-tab-btn" onclick="switchDiscordSubTab('discord-sub-welcome')">Welcome Messages</button>
-                            </div>
-
-                            <!-- 5.3.1 General Bot sub-tab -->
-                            <div id="discord-sub-general" class="discord-sub-content">
-                                <div class="settings-form-container">
-                                    <label class="custom-checkbox">
-                                        <input type="checkbox" id="discord-member-reset-enabled">
-                                        <span class="checkmark"></span> Enable Client Self HWID Resets
-                                    </label>
-                                    <p class="checkbox-help-text">Allow users to reset their HWID once every 24 hours directly from Discord commands.</p>
-
-                                    <label class="custom-checkbox">
-                                        <input type="checkbox" id="discord-dm-notifications">
-                                        <span class="checkmark"></span> DM Key details to Users on Activation
-                                    </label>
-                                    
-                                    <div class="settings-field">
-                                        <label class="glow-label">Linked Section ID (Category for client rooms)</label>
-                                        <select id="discord-section-selector">
-                                            <option value="">-- Choose Category --</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="settings-field">
-                                        <label class="glow-label">Welcome Log Embed Color</label>
-                                        <div class="color-picker-row">
-                                            <input type="text" id="discord-embed-color" value="#00FFAA">
-                                            <input type="color" id="discord-embed-color-picker" value="#00FFAA" oninput="document.getElementById('discord-embed-color').value = this.value">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 5.3.2 Logging Channels Bot sub-tab -->
-                            <div id="discord-sub-logs" class="discord-sub-content" style="display: none;">
-                                <div class="settings-form-container">
-                                    <label class="custom-checkbox">
-                                        <input type="checkbox" id="discord-log-enabled">
-                                        <span class="checkmark"></span> Enable Bot Action logs
-                                    </label>
-
-                                    <label class="custom-checkbox">
-                                        <input type="checkbox" id="discord-login-log-enabled">
-                                        <span class="checkmark"></span> Log all Key Authentication requests
-                                    </label>
-                                    
-                                    <div class="settings-field">
-                                        <label class="glow-label">Choose Target Logging Channel</label>
-                                        <select id="discord-channel-selector">
-                                            <option value="">-- Choose Channel --</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 5.3.3 Welcome Messages Bot sub-tab -->
-                            <div id="discord-sub-welcome" class="discord-sub-content" style="display: none;">
-                                <div class="settings-form-container">
-                                    <label class="custom-checkbox">
-                                        <input type="checkbox" id="discord-welcome-enabled" onchange="toggleWelcomeInput(this.checked)">
-                                        <span class="checkmark"></span> Send greeting text to client rooms
-                                    </label>
-                                    
-                                    <div id="discord-welcome-msg-container" class="settings-field">
-                                        <label class="glow-label">Welcome Message Text</label>
-                                        <textarea id="discord-welcome-msg" rows="3" placeholder="Welcome {user} to LegitAuth server! Your license was loaded."></textarea>
-                                    </div>
-
-                                    <div class="settings-field">
-                                        <label class="glow-label">Role ID given on Authentication</label>
-                                        <select id="discord-role-selector">
-                                            <option value="">-- Choose Role --</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="settings-field">
-                                        <label class="glow-label">Role name/ID given to verified buyers</label>
-                                        <input type="text" id="discord-role-on-register" placeholder="e.g. Buyer">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button onclick="saveDiscordConfig()" class="glow-btn" style="margin-top: 20px;"><i class="fas fa-floppy-disk"></i> Sync Discord settings</button>
-                        </div>
-                    </div>
-
-                    <!-- Not Linked Panel -->
-                    <div id="discord-setup-hint" class="glass-panel discord-not-linked-panel" style="display: block;">
-                        <i class="fab fa-discord main-dis-icon"></i>
-                        <h3>Discord integration requires Account Verification</h3>
-                        <p class="text-muted">Please authenticate your Discord profile under the <strong>Profile Overview</strong> sub-tab first.</p>
-                    </div>
-                </div>
 
                 <!-- 5.4 Theme Switcher Settings Sub-tab -->
                 <div id="settings-theme" class="settings-sub-content" style="display:none;">

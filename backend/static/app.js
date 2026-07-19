@@ -104,13 +104,7 @@ async function showDashboard() {
     const role = localStorage.getItem('user_role') || 'creator';
     const token = localStorage.getItem('token');
     
-    // Update Settings Profile Token dynamically
-    const tokenInput = document.getElementById('profile-api-token');
-    if (tokenInput) {
-        tokenInput.value = token || '';
-    }
-    
-    // Fetch and populate creator profile details
+    // Fetch and populate profile details
     if (token) {
         try {
             const profileRes = await fetch('/api/creator/profile', {
@@ -131,6 +125,11 @@ async function showDashboard() {
     
     loadSystemDefaults();
     
+    const emailLabel = document.getElementById('profile-email-label');
+    const resellerBadge = document.getElementById('profile-reseller-badge');
+    const googleBadge = document.getElementById('profile-google-badge');
+    const updateForm = document.getElementById('creator-update-details-form');
+    
     if (role === 'reseller') {
         const navResellers = document.getElementById('nav-resellers');
         if (navResellers) navResellers.style.display = 'none';
@@ -138,15 +137,15 @@ async function showDashboard() {
         const createAppContainer = document.querySelector('.create-app-card');
         if (createAppContainer) createAppContainer.style.display = 'none';
         
-        // Hide API Token UI for resellers as it belongs to the parent creator
-        const devTokenSec = document.querySelector('.dev-token-section');
-        if (devTokenSec) devTokenSec.style.display = 'none';
+        // Setup Reseller specific labels and badges
+        if (emailLabel) emailLabel.innerText = 'Reseller Account:';
+        if (resellerBadge) resellerBadge.style.display = 'block';
+        if (googleBadge) googleBadge.style.display = 'none';
+        if (updateForm) updateForm.style.display = 'none';
         
         // Hide Settings sub-tabs not accessible to resellers
         const defaultsTabBtn = document.getElementById('btn-settings-defaults');
         if (defaultsTabBtn) defaultsTabBtn.style.display = 'none';
-        const discordTabBtn = document.getElementById('btn-settings-discord');
-        if (discordTabBtn) discordTabBtn.style.display = 'none';
         
         // Default Settings view for resellers
         switchSettingsSubTab('settings-profile');
@@ -157,17 +156,15 @@ async function showDashboard() {
         const createAppContainer = document.querySelector('.create-app-card');
         if (createAppContainer) createAppContainer.style.display = 'block';
         
-        const devTokenSec = document.querySelector('.dev-token-section');
-        if (devTokenSec) devTokenSec.style.display = 'block';
+        // Setup Creator labels and badges
+        if (emailLabel) emailLabel.innerText = 'Email Address:';
+        if (resellerBadge) resellerBadge.style.display = 'none';
+        if (googleBadge) googleBadge.style.display = 'block';
+        if (updateForm) updateForm.style.display = 'block';
         
         // Show Settings sub-tabs for creators
         const defaultsTabBtn = document.getElementById('btn-settings-defaults');
         if (defaultsTabBtn) defaultsTabBtn.style.display = 'block';
-        const discordTabBtn = document.getElementById('btn-settings-discord');
-        if (discordTabBtn) discordTabBtn.style.display = 'block';
-        
-        // Check Discord link status and configurations
-        checkDiscordLink();
     }
     
     loadApps();
@@ -175,7 +172,17 @@ async function showDashboard() {
 
 function showTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-    document.getElementById(`${tabId}-tab`).style.display = 'block';
+    const targetTab = document.getElementById(`${tabId}-tab`);
+    if (targetTab) targetTab.style.display = 'block';
+    
+    // Update active class in sidebar links
+    document.querySelectorAll('.sidebar-menu .menu-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('onclick') && link.getAttribute('onclick').includes(`showTab('${tabId}')`)) {
+            link.classList.add('active');
+        }
+    });
+    
     if (tabId === 'resellers') {
         loadResellers();
         loadResellerAppCheckboxes();
@@ -407,14 +414,15 @@ function showAppTab(tab) {
         el.classList.remove('slide-in');
     });
     const selectedTab = document.getElementById(`app-${tab}-tab`);
-    selectedTab.style.display = 'block';
+    if (selectedTab) {
+        selectedTab.style.display = 'block';
+        // Trigger animation
+        setTimeout(() => { selectedTab.classList.add('slide-in'); }, 10);
+    }
     
-    // Trigger animation
-    setTimeout(() => { selectedTab.classList.add('slide-in'); }, 10);
-    
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab-btn'));
+    document.querySelectorAll('.sub-tabs-container .sub-tab-btn').forEach(btn => btn.classList.remove('active'));
     const btn = document.getElementById(`btn-tab-${tab}`);
-    if(btn) btn.classList.add('active-tab-btn');
+    if (btn) btn.classList.add('active');
 }
 
 async function loadUsers() {
@@ -775,444 +783,7 @@ function updateGrowthChart(usersCount, licensesCount) {
     });
 }
 
-let resolvedGuildId = null;
-let resolvedGuildName = null;
-let currentDiscordGuilds = [];
-
-async function fetchBotInviteUrl(guildId = null) {
-    const params = guildId ? `?guild_id=${guildId}` : '';
-    const res = await fetch(`${API_URL}/discord/invite-url${params}`);
-    if (res.ok) {
-        const data = await res.json();
-        if (data.redirect_uri) {
-            const hint = document.getElementById('discord-setup-hint');
-            const uriEl = document.getElementById('discord-redirect-uri');
-            if (hint && uriEl) {
-                uriEl.textContent = data.redirect_uri;
-                hint.style.display = 'block';
-            }
-        }
-        return data.invite_url;
-    }
-    return null;
-}
-
-async function setBotInviteLink(elementId, guildId = null) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    const url = await fetchBotInviteUrl(guildId);
-    if (url) el.href = url;
-}
-
-function toggleWelcomeInput(checked) {
-    const container = document.getElementById('discord-welcome-msg-container');
-    if (container) {
-        container.style.display = checked ? 'block' : 'none';
-    }
-}
-
-async function checkDiscordLink() {
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/me`, {headers: {'Authorization': `Bearer ${token}`}});
-        if (res.ok) {
-            const userData = await res.json();
-            document.getElementById('discord-link-status').style.display = 'none';
-            document.getElementById('discord-linked-status').style.display = 'block';
-            document.getElementById('discord-user-tag').innerText = userData.username + '#' + (userData.discriminator || '0');
-            document.getElementById('discord-integration-details').style.display = 'block';
-            await loadDiscordGuilds();
-            await loadGlobalDiscordConfig();
-        }
-    } catch(e) {
-        // Discord not linked
-        document.getElementById('discord-link-status').style.display = 'block';
-        document.getElementById('discord-linked-status').style.display = 'none';
-        document.getElementById('discord-integration-details').style.display = 'none';
-    }
-}
-
-async function linkDiscordAccount() {
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/login`, {headers: {'Authorization': `Bearer ${token}`}});
-        if (res.ok) {
-            const data = await res.json();
-            window.location.href = data.auth_url;
-        }
-    } catch(e) {
-        showToast('Error initiating Discord link', 'error');
-    }
-}
-
-async function loadDiscordGuilds() {
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/guilds`, {headers: {'Authorization': `Bearer ${token}`}});
-        if (res.ok) {
-            const guilds = await res.json();
-            currentDiscordGuilds = guilds;
-            const guildSelector = document.getElementById('discord-guild-selector');
-            guildSelector.innerHTML = '<option value="">-- Select Server --</option>';
-            guilds.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id;
-                opt.text = g.name;
-                guildSelector.appendChild(opt);
-            });
-            showToast(`Loaded ${guilds.length} servers!`, 'info');
-        } else {
-            throw new Error();
-        }
-    } catch(e) {
-        showToast('Could not load Discord servers', 'error');
-    }
-}
-
-async function onDiscordGuildSelect(guildId) {
-    if (!guildId) {
-        document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
-        document.getElementById('discord-role-selector').innerHTML = '<option value="">-- Choose Role --</option>';
-        await setBotInviteLink('discord-invite-link');
-        return;
-    }
-    
-    resolvedGuildId = guildId;
-    const guild = currentDiscordGuilds.find(g => g.id == guildId);
-    if (guild) resolvedGuildName = guild.name;
-    
-    await setBotInviteLink('discord-invite-link', guildId);
-    await setBotInviteLink('btn-step2', guildId);
-    
-    // Load channels and roles
-    await loadDiscordGuildChannels(guildId);
-    await loadDiscordGuildRoles(guildId);
-}
-
-async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
-    const token = localStorage.getItem('token');
-    const selector = document.getElementById('discord-channel-selector');
-    selector.innerHTML = '<option value="">-- Loading Channels --</option>';
-    
-    try {
-        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/channels`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        if (res.ok) {
-            const channels = await res.json();
-            selector.innerHTML = '<option value="">-- Choose Channel --</option>';
-            channels.forEach(ch => {
-                const opt = document.createElement('option');
-                opt.value = ch.id;
-                opt.text = `#${ch.name}`;
-                if (selectedChannelId && ch.id == selectedChannelId) {
-                    opt.selected = true;
-                }
-                selector.appendChild(opt);
-            });
-        } else {
-            const data = await res.json();
-            selector.innerHTML = '<option value="">-- Invite bot first, then refresh --</option>';
-            showToast(data.detail || 'Make sure the Bot is in your server!', 'warning');
-        }
-    } catch(e) {
-        selector.innerHTML = '<option value="">-- Error loading channels --</option>';
-    }
-}
-
-async function loadDiscordGuildSections(guildId, selectedSectionId = null) {
-    const selector = document.getElementById('discord-section-selector');
-    if (!selector) return;
-    const token = localStorage.getItem('token');
-    selector.innerHTML = '<option value="">-- Loading Sections --</option>';
-    
-    try {
-        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/sections`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        if (res.ok) {
-            const sections = await res.json();
-            selector.innerHTML = '<option value="">-- Choose Section --</option>';
-            sections.forEach(sec => {
-                const opt = document.createElement('option');
-                opt.value = sec.id;
-                opt.text = `📁 ${sec.name}`;
-                if (selectedSectionId && sec.id == selectedSectionId) {
-                    opt.selected = true;
-                }
-                selector.appendChild(opt);
-            });
-        } else {
-            selector.innerHTML = '<option value="">-- Choose Section --</option>';
-        }
-    } catch(e) {
-        selector.innerHTML = '<option value="">-- Error loading sections --</option>';
-    }
-}
-
-async function loadDiscordGuildRoles(guildId, selectedRoleId = null) {
-    const token = localStorage.getItem('token');
-    const selector = document.getElementById('discord-role-selector');
-    selector.innerHTML = '<option value="">-- Loading Roles --</option>';
-    
-    try {
-        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/roles`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        if (res.ok) {
-            const roles = await res.json();
-            selector.innerHTML = '<option value="">-- Choose Role --</option>';
-            roles.forEach(role => {
-                const opt = document.createElement('option');
-                opt.value = role.id;
-                opt.text = `👤 ${role.name}`;
-                if (selectedRoleId && role.id == selectedRoleId) {
-                    opt.selected = true;
-                }
-                selector.appendChild(opt);
-            });
-        } else {
-            const data = await res.json();
-            selector.innerHTML = '<option value="">-- Invite bot first, then refresh --</option>';
-            showToast(data.detail || 'Make sure the Bot is in your server!', 'warning');
-        }
-    } catch(e) {
-        selector.innerHTML = '<option value="">-- Error loading roles --</option>';
-    }
-}
-
-async function loadGlobalDiscordConfig() {
-    const statusText = document.getElementById('discord-status-text');
-    const statusBadge = document.getElementById('discord-status-badge');
-    const unlinkBtn = document.getElementById('discord-unlink-btn');
-    const token = localStorage.getItem('token');
-    
-    try {
-        const res = await fetch(`${API_URL}/discord/config`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        if (res.ok) {
-            const config = await res.json();
-            if (config.discord_guild_id) {
-                let statusString = `Linked to server "${config.discord_guild_name}"`;
-                if (config.discord_channel_name) {
-                    statusString += ` (Channel: #${config.discord_channel_name})`;
-                }
-                statusText.innerText = statusString;
-                
-                statusBadge.innerText = config.bot_enabled !== false ? 'Active' : 'Disabled';
-                statusBadge.style.background = config.bot_enabled !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
-                statusBadge.style.color = config.bot_enabled !== false ? '#10b981' : '#ef4444';
-                statusBadge.style.borderColor = config.bot_enabled !== false ? '#10b981' : '#ef4444';
-                unlinkBtn.style.display = 'inline-block';
-                
-                // Populate the guild selector
-                resolvedGuildId = config.discord_guild_id;
-                resolvedGuildName = config.discord_guild_name;
-                const guildSelector = document.getElementById('discord-guild-selector');
-                const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
-                if (!existingOption) {
-                    const opt = document.createElement('option');
-                    opt.value = resolvedGuildId;
-                    opt.text = resolvedGuildName;
-                    guildSelector.appendChild(opt);
-                }
-                guildSelector.value = resolvedGuildId;
-                
-                await setBotInviteLink('discord-invite-link', resolvedGuildId);
-            } else {
-                statusText.innerText = 'Not Configured';
-                statusBadge.innerText = 'Inactive';
-                statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
-                statusBadge.style.color = '#ef4444';
-                statusBadge.style.borderColor = '#ef4444';
-                unlinkBtn.style.display = 'none';
-                
-                document.getElementById('discord-guild-selector').value = '';
-            }
-
-            // Populate feature configurations in UI
-            document.getElementById('discord-log-enabled').checked = !!config.discord_log_enabled;
-            document.getElementById('discord-login-log-enabled').checked = !!config.discord_login_log_enabled;
-            document.getElementById('discord-member-reset-enabled').checked = !!config.discord_member_reset_enabled;
-            
-            const colorVal = config.discord_embed_color || '#00FFAA';
-            document.getElementById('discord-embed-color').value = colorVal;
-            document.getElementById('discord-embed-color-picker').value = colorVal;
-            
-            document.getElementById('discord-welcome-enabled').checked = !!config.discord_welcome_enabled;
-            document.getElementById('discord-welcome-msg').value = config.discord_welcome_msg || 'Welcome to the Server!';
-            document.getElementById('discord-role-on-register').value = config.discord_role_on_register || '';
-            document.getElementById('discord-dm-notifications').checked = config.discord_dm_notifications !== false;
-            toggleWelcomeInput(!!config.discord_welcome_enabled);
-        }
-    } catch(e) {
-        showToast('Failed to load Discord settings', 'error');
-    }
-}
-
-async function resolveDiscordInvite() {
-    const invite = document.getElementById('discord-invite-input').value.trim();
-    if (!invite) return showToast('Please enter an invite link or code', 'error');
-    
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/resolve-invite?invite=${encodeURIComponent(invite)}`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        const data = await res.json();
-        if (res.ok) {
-            resolvedGuildId = data.guild_id;
-            resolvedGuildName = data.guild_name;
-            
-            // Load into selector
-            const guildSelector = document.getElementById('discord-guild-selector');
-            const existingOption = Array.from(guildSelector.options).find(o => o.value == resolvedGuildId);
-            if (!existingOption) {
-                const opt = document.createElement('option');
-                opt.value = resolvedGuildId;
-                opt.text = resolvedGuildName;
-                guildSelector.appendChild(opt);
-            }
-            guildSelector.value = resolvedGuildId;
-            
-            await setBotInviteLink('discord-invite-link', resolvedGuildId);
-            
-            showToast('Discord server found!', 'success');
-            
-            // Fetch channels
-            await loadDiscordGuildChannels(resolvedGuildId);
-        } else {
-            showToast(data.detail || 'Could not resolve invite link', 'error');
-        }
-    } catch(e) {
-        showToast('Error resolving invite', 'error');
-    }
-}
-
-async function loadDiscordChannels(guildId, selectedChannelId = null) {
-    await loadDiscordGuildChannels(guildId, selectedChannelId);
-}
-
-async function saveDiscordConfig() {
-    const logEnabled = document.getElementById('discord-log-enabled').checked;
-    const loginLogEnabled = document.getElementById('discord-login-log-enabled').checked;
-    const memberResetEnabled = document.getElementById('discord-member-reset-enabled').checked;
-    const embedColor = document.getElementById('discord-embed-color').value || '#00FFAA';
-    
-    const welcomeEnabled = document.getElementById('discord-welcome-enabled').checked;
-    const welcomeMsg = document.getElementById('discord-welcome-msg').value;
-    const roleOnRegister = document.getElementById('discord-role-on-register').value;
-    const dmNotifications = document.getElementById('discord-dm-notifications').checked;
-    
-    const token = localStorage.getItem('token');
-    try {
-        // Fetch current config to preserve direct config values like allowed channel/roles/enabled status
-        const getRes = await fetch(`${API_URL}/discord/config`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        let currentConfig = {};
-        if (getRes.ok) {
-            currentConfig = await getRes.json();
-        }
-
-        const bodyPayload = {
-            ...currentConfig,
-            discord_guild_id: resolvedGuildId,
-            discord_guild_name: resolvedGuildName,
-            discord_log_enabled: logEnabled,
-            discord_login_log_enabled: loginLogEnabled,
-            discord_member_reset_enabled: memberResetEnabled,
-            discord_embed_color: embedColor,
-            discord_welcome_enabled: welcomeEnabled,
-            discord_welcome_msg: welcomeMsg,
-            discord_role_on_register: roleOnRegister || null,
-            discord_dm_notifications: dmNotifications
-        };
-
-        const res = await fetch(`${API_URL}/discord/config`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(bodyPayload)
-        });
-        if (res.ok) {
-            showToast('Discord configuration saved successfully!', 'success');
-            await loadGlobalDiscordConfig();
-        } else {
-            const data = await res.json();
-            showToast(data.detail || 'Failed to save configuration', 'error');
-        }
-    } catch(e) {
-        showToast('Error saving Discord config', 'error');
-    }
-}
-
-async function unlinkDiscordConfig() {
-    if (!confirm('Are you sure you want to unlink Discord from this account?')) return;
-    
-    const token = localStorage.getItem('token');
-    try {
-        const res = await fetch(`${API_URL}/discord/config`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                discord_guild_id: null,
-                discord_channel_id: null,
-                discord_guild_name: null,
-                discord_channel_name: null,
-                discord_role_id: null,
-                discord_role_name: null,
-                discord_log_enabled: false,
-                discord_login_log_enabled: false,
-                discord_member_reset_enabled: false,
-                discord_embed_color: '#00FFAA',
-                discord_welcome_enabled: false,
-                discord_welcome_msg: "Welcome to the Server!",
-                discord_role_on_register: null,
-                discord_dm_notifications: true
-            })
-        });
-        if (res.ok) {
-            showToast('Discord integration removed.', 'info');
-            await loadGlobalDiscordConfig();
-        } else {
-            const data = await res.json();
-            showToast(data.detail || 'Failed to unlink', 'error');
-        }
-    } catch(e) {
-        showToast('Error unlinking Discord integration', 'error');
-    }
-}
-
-// Check auth on load
-if (localStorage.getItem('token')) {
-    showDashboard();
-}
-
-function switchDiscordSubTab(subTabId) {
-    document.querySelectorAll('.discord-sub-content').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.sub-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-        btn.style.color = 'var(--text-muted)';
-        btn.style.borderBottom = '2px solid transparent';
-    });
-    
-    const target = document.getElementById(subTabId);
-    if (target) target.style.display = 'block';
-    
-    const activeBtnId = subTabId.replace('discord-sub', 'btn-sub');
-    const activeBtn = document.getElementById(activeBtnId);
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-        activeBtn.style.color = 'white';
-        activeBtn.style.borderBottom = '2px solid var(--primary)';
-    }
+// Discord integration logic removed.   }
 }
 
 // --- Reseller System Frontend Logic ---
@@ -1625,16 +1196,4 @@ function loadSystemDefaults() {
     if (hwidEl) hwidEl.value = hwid;
 }
 
-function toggleTokenVisibility() {
-    const tokenInput = document.getElementById('profile-api-token');
-    const icon = document.getElementById('token-eye-icon');
-    if (tokenInput && icon) {
-        if (tokenInput.type === 'password') {
-            tokenInput.type = 'text';
-            icon.className = 'fas fa-eye-slash';
-        } else {
-            tokenInput.type = 'password';
-            icon.className = 'fas fa-eye';
-        }
-    }
-}
+
