@@ -897,7 +897,7 @@ async def set_channel(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return  # Ignore silently
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -909,7 +909,7 @@ async def set_channel(interaction: discord.Interaction):
     config["discord_guild_id"] = str(interaction.guild_id)
     config["discord_guild_name"] = interaction.guild.name
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message("✅ Command channel updated.", ephemeral=True)
@@ -921,7 +921,7 @@ async def remove_channel(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -931,7 +931,7 @@ async def remove_channel(interaction: discord.Interaction):
     config["discord_channel_id"] = None
     config["discord_channel_name"] = None
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message("✅ Command channel removed.", ephemeral=True)
@@ -944,7 +944,7 @@ async def set_role(interaction: discord.Interaction, role: discord.Role):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -958,7 +958,7 @@ async def set_role(interaction: discord.Interaction, role: discord.Role):
         
     config["discord_allowed_roles"] = ",".join(current_roles)
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message(f"✅ Allowed role updated.", ephemeral=True)
@@ -971,7 +971,7 @@ async def remove_role(interaction: discord.Interaction, role: discord.Role):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -985,7 +985,7 @@ async def remove_role(interaction: discord.Interaction, role: discord.Role):
         
     config["discord_allowed_roles"] = ",".join(current_roles) if current_roles else None
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message("✅ Allowed role removed.", ephemeral=True)
@@ -997,7 +997,7 @@ async def list_roles(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch roles configuration.", ephemeral=True)
@@ -1026,7 +1026,7 @@ async def enable_bot(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -1035,7 +1035,7 @@ async def enable_bot(interaction: discord.Interaction):
     config = resp_get.json()
     config["bot_enabled"] = True
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message("✅ Bot enabled.", ephemeral=True)
@@ -1047,7 +1047,7 @@ async def disable_bot(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch current configuration.", ephemeral=True)
@@ -1056,7 +1056,7 @@ async def disable_bot(interaction: discord.Interaction):
     config = resp_get.json()
     config["bot_enabled"] = False
     
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_put = requests.put(url_put, json=config, headers=api_headers())
     if resp_put.status_code == 200:
         await interaction.response.send_message("✅ Bot disabled.", ephemeral=True)
@@ -1068,7 +1068,7 @@ async def config_info(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_get = f"{API_BASE}/api/creator/discord/config"
+    url_get = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     resp_get = requests.get(url_get, headers=api_headers())
     if resp_get.status_code != 200:
         await interaction.response.send_message("❌ Failed to fetch configuration info.", ephemeral=True)
@@ -1112,7 +1112,7 @@ async def config_reset(interaction: discord.Interaction):
     if not is_guild_owner(interaction):
         return
         
-    url_put = f"{API_BASE}/api/creator/discord/config"
+    url_put = f"{API_BASE}/api/creator/discord/config-by-guild/{interaction.guild_id}"
     default_payload = {
         "discord_guild_id": str(interaction.guild_id),
         "discord_guild_name": interaction.guild.name,
