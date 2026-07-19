@@ -52,6 +52,44 @@ function logout() {
     showToast('Logged out successfully', 'info');
 }
 
+function openLogoutModal() {
+    const modal = document.getElementById('logout-modal');
+    const input = document.getElementById('logout-confirm-input');
+    if (modal && input) {
+        modal.style.display = 'flex';
+        input.value = '';
+        input.focus();
+        
+        input.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                submitLogout();
+            }
+        };
+    }
+}
+
+function closeLogoutModal() {
+    const modal = document.getElementById('logout-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function submitLogout() {
+    const input = document.getElementById('logout-confirm-input');
+    if (input) {
+        const text = input.value.trim().toLowerCase();
+        if (text === 'logout') {
+            closeLogoutModal();
+            logout();
+        } else {
+            showToast('Invalid confirmation text. Type "logout" to confirm.', 'error');
+            input.focus();
+            input.select();
+        }
+    }
+}
+
 function showDashboard() {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('dashboard-container').style.display = 'flex';
@@ -704,6 +742,8 @@ async function loadDiscordGuilds() {
 async function onDiscordGuildSelect(guildId) {
     if (!guildId) {
         document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
+        document.getElementById('discord-section-selector').innerHTML = '<option value="">-- Choose Section --</option>';
+        document.getElementById('discord-role-selector').innerHTML = '<option value="">-- Choose Role --</option>';
         await setBotInviteLink('discord-invite-link');
         return;
     }
@@ -715,8 +755,10 @@ async function onDiscordGuildSelect(guildId) {
     await setBotInviteLink('discord-invite-link', guildId);
     await setBotInviteLink('btn-step2', guildId);
     
-    // Load channels
+    // Load channels, sections, and roles
     await loadDiscordGuildChannels(guildId);
+    await loadDiscordGuildSections(guildId);
+    await loadDiscordGuildRoles(guildId);
 }
 
 async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
@@ -750,6 +792,64 @@ async function loadDiscordGuildChannels(guildId, selectedChannelId = null) {
     }
 }
 
+async function loadDiscordGuildSections(guildId, selectedSectionId = null) {
+    const token = localStorage.getItem('token');
+    const selector = document.getElementById('discord-section-selector');
+    selector.innerHTML = '<option value="">-- Loading Sections --</option>';
+    
+    try {
+        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/sections`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const sections = await res.json();
+            selector.innerHTML = '<option value="">-- Choose Section --</option>';
+            sections.forEach(sec => {
+                const opt = document.createElement('option');
+                opt.value = sec.id;
+                opt.text = `📁 ${sec.name}`;
+                if (selectedSectionId && sec.id == selectedSectionId) {
+                    opt.selected = true;
+                }
+                selector.appendChild(opt);
+            });
+        } else {
+            selector.innerHTML = '<option value="">-- Choose Section --</option>';
+        }
+    } catch(e) {
+        selector.innerHTML = '<option value="">-- Error loading sections --</option>';
+    }
+}
+
+async function loadDiscordGuildRoles(guildId, selectedRoleId = null) {
+    const token = localStorage.getItem('token');
+    const selector = document.getElementById('discord-role-selector');
+    selector.innerHTML = '<option value="">-- Loading Roles --</option>';
+    
+    try {
+        const res = await fetch(`${API_URL}/discord/guilds/${guildId}/roles`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        if (res.ok) {
+            const roles = await res.json();
+            selector.innerHTML = '<option value="">-- Choose Role --</option>';
+            roles.forEach(role => {
+                const opt = document.createElement('option');
+                opt.value = role.id;
+                opt.text = `👤 ${role.name}`;
+                if (selectedRoleId && role.id == selectedRoleId) {
+                    opt.selected = true;
+                }
+                selector.appendChild(opt);
+            });
+        } else {
+            selector.innerHTML = '<option value="">-- Choose Role --</option>';
+        }
+    } catch(e) {
+        selector.innerHTML = '<option value="">-- Error loading roles --</option>';
+    }
+}
+
 async function switchDiscordApp(appId) {
     if (!appId) {
         document.getElementById('discord-integration-details').style.display = 'none';
@@ -765,8 +865,15 @@ async function switchDiscordApp(appId) {
     const statusBadge = document.getElementById('discord-status-badge');
     const unlinkBtn = document.getElementById('discord-unlink-btn');
     
-    if (app.discord_guild_id && app.discord_channel_id) {
-        statusText.innerText = `Linked to server "${app.discord_guild_name}" in channel #${app.discord_channel_name}`;
+    if (app.discord_guild_id && (app.discord_channel_id || app.discord_section_id)) {
+        let statusString = `Linked to server "${app.discord_guild_name}"`;
+        if (app.discord_channel_id) {
+            statusString += ` in channel #${app.discord_channel_name}`;
+        }
+        if (app.discord_section_id) {
+            statusString += ` inside section [📁 ${app.discord_section_name}]`;
+        }
+        statusText.innerText = statusString;
         statusBadge.innerText = 'Active';
         statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
         statusBadge.style.color = '#10b981';
@@ -788,8 +895,10 @@ async function switchDiscordApp(appId) {
         
         await setBotInviteLink('discord-invite-link', resolvedGuildId);
         
-        // Load channels
+        // Load channels, sections, and roles with pre-selected values
         await loadDiscordGuildChannels(resolvedGuildId, app.discord_channel_id);
+        await loadDiscordGuildSections(resolvedGuildId, app.discord_section_id);
+        await loadDiscordGuildRoles(resolvedGuildId, app.discord_role_id);
     } else {
         statusText.innerText = 'Not Configured';
         statusBadge.innerText = 'Inactive';
@@ -797,7 +906,21 @@ async function switchDiscordApp(appId) {
         statusBadge.style.color = '#ef4444';
         statusBadge.style.borderColor = '#ef4444';
         unlinkBtn.style.display = 'none';
+        
+        // Reset dropdowns
+        document.getElementById('discord-guild-selector').value = '';
+        document.getElementById('discord-channel-selector').innerHTML = '<option value="">-- Choose Channel --</option>';
+        document.getElementById('discord-section-selector').innerHTML = '<option value="">-- Choose Section --</option>';
+        document.getElementById('discord-role-selector').innerHTML = '<option value="">-- Choose Role --</option>';
     }
+
+    // Populate feature configurations in UI
+    document.getElementById('discord-log-enabled').checked = !!app.discord_log_enabled;
+    document.getElementById('discord-welcome-enabled').checked = !!app.discord_welcome_enabled;
+    document.getElementById('discord-welcome-msg').value = app.discord_welcome_msg || 'Welcome to the Server!';
+    document.getElementById('discord-role-on-register').value = app.discord_role_on_register || '';
+    document.getElementById('discord-dm-notifications').checked = app.discord_dm_notifications !== false;
+    toggleWelcomeInput(!!app.discord_welcome_enabled);
 }
 
 async function resolveDiscordInvite() {
@@ -845,11 +968,27 @@ async function loadDiscordChannels(guildId, selectedChannelId = null) {
 
 async function saveDiscordConfig() {
     const appId = document.getElementById('discord-app-selector').value;
-    const channelId = document.getElementById('discord-channel-selector').value;
     const channelSelector = document.getElementById('discord-channel-selector');
+    const channelId = channelSelector.value;
     const channelName = channelSelector.options[channelSelector.selectedIndex]?.text.replace('#', '') || '';
     
-    if (!channelId) return showToast('Please select an operating channel', 'error');
+    const sectionSelector = document.getElementById('discord-section-selector');
+    const sectionId = sectionSelector.value;
+    const sectionName = sectionSelector.options[sectionSelector.selectedIndex]?.text.replace('📁 ', '') || '';
+    
+    const roleSelector = document.getElementById('discord-role-selector');
+    const roleId = roleSelector.value;
+    const roleName = roleSelector.options[roleSelector.selectedIndex]?.text.replace('👤 ', '') || '';
+    
+    if (!channelId && !sectionId) {
+        return showToast('Please select either an operating channel or an operating section (category)', 'error');
+    }
+    
+    const logEnabled = document.getElementById('discord-log-enabled').checked;
+    const welcomeEnabled = document.getElementById('discord-welcome-enabled').checked;
+    const welcomeMsg = document.getElementById('discord-welcome-msg').value;
+    const roleOnRegister = document.getElementById('discord-role-on-register').value;
+    const dmNotifications = document.getElementById('discord-dm-notifications').checked;
     
     const token = localStorage.getItem('token');
     try {
@@ -861,9 +1000,18 @@ async function saveDiscordConfig() {
             },
             body: JSON.stringify({
                 discord_guild_id: resolvedGuildId,
-                discord_channel_id: channelId,
+                discord_channel_id: channelId || null,
                 discord_guild_name: resolvedGuildName,
-                discord_channel_name: channelName
+                discord_channel_name: channelName || null,
+                discord_section_id: sectionId || null,
+                discord_section_name: sectionName || null,
+                discord_role_id: roleId || null,
+                discord_role_name: roleName || null,
+                discord_log_enabled: logEnabled,
+                discord_welcome_enabled: welcomeEnabled,
+                discord_welcome_msg: welcomeMsg,
+                discord_role_on_register: roleOnRegister || null,
+                discord_dm_notifications: dmNotifications
             })
         });
         if (res.ok) {
@@ -897,7 +1045,16 @@ async function unlinkDiscordConfig() {
                 discord_guild_id: null,
                 discord_channel_id: null,
                 discord_guild_name: null,
-                discord_channel_name: null
+                discord_channel_name: null,
+                discord_section_id: null,
+                discord_section_name: null,
+                discord_role_id: null,
+                discord_role_name: null,
+                discord_log_enabled: false,
+                discord_welcome_enabled: false,
+                discord_welcome_msg: "Welcome to the Server!",
+                discord_role_on_register: null,
+                discord_dm_notifications: true
             })
         });
         if (res.ok) {

@@ -93,7 +93,8 @@ def api_headers_for_user(user_id: int):
 def api_headers():
     return {"Authorization": f"Bearer {DEFAULT_API_TOKEN}"}
 
-def get_linked_app(channel_id: int, user_id: int):
+def get_linked_app(channel_id: int, category_id: Optional[int], user_id: int):
+    # 1. Check by channel_id
     url = f"{API_BASE}/api/creator/discord/app-by-channel/{channel_id}"
     try:
         resp = requests.get(url, headers=api_headers_for_user(user_id))
@@ -101,13 +102,68 @@ def get_linked_app(channel_id: int, user_id: int):
             return resp.json()
     except Exception:
         pass
+
+    # 2. Check by category_id (section)
+    if category_id:
+        url = f"{API_BASE}/api/creator/discord/app-by-section/{category_id}"
+        try:
+            resp = requests.get(url, headers=api_headers_for_user(user_id))
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception:
+            pass
     return None
 
 def get_current_app(interaction: discord.Interaction):
     app = user_selected_app.get(interaction.user.id)
     if not app:
-        app = get_linked_app(interaction.channel_id, interaction.user.id)
+        category_id = getattr(interaction.channel, "category_id", None)
+        app = get_linked_app(interaction.channel_id, category_id, interaction.user.id)
     return app
+
+def validate_bot_access(interaction: discord.Interaction, app: dict) -> tuple[bool, str]:
+    # Check channel/section restriction
+    chan_id = app.get("discord_channel_id")
+    sect_id = app.get("discord_section_id")
+    role_id = app.get("discord_role_id")
+    
+    # If either channel or section is restricted, interaction must be inside that channel or section
+    if chan_id or sect_id:
+        channel_matched = (chan_id and str(interaction.channel_id) == str(chan_id))
+        category_id = getattr(interaction.channel, "category_id", None)
+        section_matched = (sect_id and category_id and str(category_id) == str(sect_id))
+        
+        if not (channel_matched or section_matched):
+            return False, "This bot is not active in this channel/section."
+            
+    # Check role restriction
+    if role_id:
+        if not isinstance(interaction.user, discord.Member):
+            return False, "This command can only be used in a server."
+        user_role_ids = [str(r.id) for r in interaction.user.roles]
+        if str(role_id) not in user_role_ids:
+            return False, f"Only users with the role '{app.get('discord_role_name', 'Authorized Role')}' can run commands."
+            
+    return True, ""
+
+@tree.interaction_check
+async def global_interaction_check(interaction: discord.Interaction) -> bool:
+    # Skip checks for non-app management setup commands
+    bypass_commands = ["link_token", "unlink_token", "list_apps", "select_app", "register", "help"]
+    if interaction.command and interaction.command.name in bypass_commands:
+        return True
+    
+    app = get_current_app(interaction)
+    if not app:
+        # If no app linked, let the command execute so it returns its default error message
+        return True
+        
+    allowed, msg = validate_bot_access(interaction, app)
+    if not allowed:
+        await interaction.response.send_message(f"❌ {msg}", ephemeral=True)
+        return False
+        
+    return True
 
 # New commands for linking/unlinking token
 @tree.command(name="link_token", description="Link your LegitAuth API token to use the bot")
