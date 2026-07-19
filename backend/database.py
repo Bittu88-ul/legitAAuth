@@ -180,10 +180,10 @@ def init_db():
     for field in ["is_admin", "can_ban_users", "can_clean_banned", "can_modify_app_settings"]:
         try:
             with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE resellers ADD COLUMN {field} BOOLEAN DEFAULT 0"))
+                conn.execute(text(f"ALTER TABLE resellers ADD COLUMN {field} BOOLEAN DEFAULT FALSE"))
         except Exception:
             pass
-    # Ensure discord fields exist for existing sqlite database
+    # Ensure discord fields exist for existing database
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE applications ADD COLUMN discord_guild_id VARCHAR"))
@@ -206,12 +206,12 @@ def init_db():
         pass
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_log_enabled BOOLEAN DEFAULT 0"))
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_log_enabled BOOLEAN DEFAULT FALSE"))
     except Exception:
         pass
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_welcome_enabled BOOLEAN DEFAULT 0"))
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_welcome_enabled BOOLEAN DEFAULT FALSE"))
     except Exception:
         pass
     try:
@@ -226,7 +226,7 @@ def init_db():
         pass
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT 1"))
+            conn.execute(text("ALTER TABLE applications ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT TRUE"))
     except Exception:
         pass
     try:
@@ -267,7 +267,7 @@ def init_db():
         pass
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_token_expires_at DATETIME"))
+            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_token_expires_at TIMESTAMP"))
     except Exception:
         pass
 
@@ -282,13 +282,13 @@ def init_db():
     for field in ["discord_log_enabled", "discord_welcome_enabled", "discord_member_reset_enabled", "discord_login_log_enabled"]:
         try:
             with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE creators ADD COLUMN {field} BOOLEAN DEFAULT 0"))
+                conn.execute(text(f"ALTER TABLE creators ADD COLUMN {field} BOOLEAN DEFAULT FALSE"))
         except Exception:
             pass
             
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT 1"))
+            conn.execute(text("ALTER TABLE creators ADD COLUMN discord_dm_notifications BOOLEAN DEFAULT TRUE"))
     except Exception:
         pass
 
@@ -300,7 +300,7 @@ def init_db():
 
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE creators ADD COLUMN bot_enabled BOOLEAN DEFAULT 1"))
+            conn.execute(text("ALTER TABLE creators ADD COLUMN bot_enabled BOOLEAN DEFAULT TRUE"))
     except Exception:
         pass
 
@@ -312,7 +312,7 @@ def init_db():
 
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE applications ADD COLUMN bot_enabled BOOLEAN DEFAULT 1"))
+            conn.execute(text("ALTER TABLE applications ADD COLUMN bot_enabled BOOLEAN DEFAULT TRUE"))
     except Exception:
         pass
 
