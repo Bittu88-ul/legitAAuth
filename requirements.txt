@@ -7,5 +7,4 @@ PyJWT
 requests
 google-auth
 psycopg2-binary
-discord.py>=2.3.0
 python-dotenv

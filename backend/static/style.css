@@ -1668,3 +1668,82 @@ tr:hover {
     0% { filter: drop-shadow(0 0 2px var(--primary-glow)) opacity(0.8); }
     100% { filter: drop-shadow(0 0 12px var(--primary)) opacity(1); }
 }
+
+/* Brand Logo styles */
+.brand-logo {
+    height: 32px;
+    width: auto;
+    margin-right: 12px;
+    border-radius: 6px;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+/* Home Overview Layout Grid */
+.home-layout-grid {
+    display: grid;
+    grid-template-columns: 1.8fr 1.2fr;
+    gap: 20px;
+    margin-top: 25px;
+}
+
+@media (max-width: 1024px) {
+    .home-layout-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.quick-actions-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+@media (max-width: 600px) {
+    .quick-actions-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    color: var(--text-highlight);
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+}
+
+.quick-action-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+}
+
+.quick-action-btn i {
+    font-size: 20px;
+    color: var(--primary);
+    width: 24px;
+    text-align: center;
+}
+
+.quick-action-btn div h4 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: white;
+}
+
+.quick-action-btn div p {
+    margin: 3px 0 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+

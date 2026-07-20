@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LegitAuth - Elite Licensing & Auth System</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/png" href="/static/logo.png">
     <!-- FontAwesome Pro Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts Inter & Outfit -->
@@ -26,7 +27,7 @@
     <div class="auth-wrapper" id="auth-container">
         <div class="auth-left">
             <div class="auth-brand">
-                <i class="fas fa-shield-halved brand-icon animate-pulse"></i>
+                <img src="/static/logo.png" class="brand-logo animate-pulse" alt="LegitAuth Logo">
                 <span class="brand-name">LegitAuth</span>
             </div>
             <h1 class="auth-left-title">Next-Gen Licensing Platform</h1>
@@ -53,13 +54,6 @@
                     <div class="l-feat-content">
                         <h4>Reseller Channels</h4>
                         <p>Delegate licensing control to resellers with restricted scopes.</p>
-                    </div>
-                </div>
-                <div class="login-feature-card">
-                    <div class="l-feat-icon"><i class="fab fa-discord text-blur-glow"></i></div>
-                    <div class="l-feat-content">
-                        <h4>Discord Integrations</h4>
-                        <p>Link actions, log entry triggers, and self-service HWID resets.</p>
                     </div>
                 </div>
             </div>
@@ -122,12 +116,14 @@
     <div class="dashboard-container" id="dashboard-container" style="display:none;">
         <nav class="sidebar">
             <div class="sidebar-brand">
-                <i class="fas fa-shield-halved brand-logo-icon"></i>
+                <img src="/static/logo.png" class="brand-logo" alt="LegitAuth Logo">
                 <h2>LegitAuth</h2>
             </div>
 
             <ul class="sidebar-menu">
-                <li><a href="#" class="menu-link active" onclick="showTab('apps')"><i class="fas fa-cubes"></i>
+                <li><a href="#" class="menu-link active" onclick="showTab('home')"><i class="fas fa-house"></i>
+                        <span>Home</span></a></li>
+                <li><a href="#" class="menu-link" onclick="showTab('apps')"><i class="fas fa-cubes"></i>
                         <span>Applications</span></a></li>
                 <li><a href="#" class="menu-link" onclick="showTab('workspace')"><i class="fas fa-briefcase"></i>
                         <span>Workspace</span></a></li>
@@ -143,12 +139,12 @@
         </nav>
 
         <main class="main-content">
-            <!-- 1. Applications Tab -->
-            <div id="apps-tab" class="tab-content">
+            <!-- 0. Home Overview Tab -->
+            <div id="home-tab" class="tab-content">
                 <div class="tab-header">
                     <div>
-                        <h1>Applications Dashboard</h1>
-                        <p class="text-muted">High-level view of all active services and analytics.</p>
+                        <h1>Console Overview</h1>
+                        <p class="text-muted">Welcome back! Here's a high-level summary of your licensing network.</p>
                     </div>
                 </div>
 
@@ -184,11 +180,72 @@
                     </div>
                 </div>
 
-                <!-- Growth Graph Analytics -->
-                <div class="glass-panel analytics-panel">
-                    <h3><i class="fas fa-chart-line header-icon"></i> Licensing & Activation Metrics</h3>
-                    <div class="chart-container">
-                        <canvas id="growthChart"></canvas>
+                <!-- Home Page Main Layout Grid -->
+                <div class="home-layout-grid">
+                    <div class="home-left-col">
+                        <!-- Growth Graph Analytics -->
+                        <div class="glass-panel analytics-panel" style="margin-top: 0;">
+                            <h3><i class="fas fa-chart-line header-icon"></i> Licensing & Activation Metrics</h3>
+                            <div class="chart-container">
+                                <canvas id="growthChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions Grid -->
+                        <div class="glass-panel" style="margin-top: 20px;">
+                            <h3><i class="fas fa-circle-nodes header-icon"></i> Console Quick Actions</h3>
+                            <div class="quick-actions-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                                <a onclick="showTab('apps')" class="quick-action-btn">
+                                    <i class="fas fa-plus"></i>
+                                    <div>
+                                        <h4>Create Application</h4>
+                                        <p>Register new software service</p>
+                                    </div>
+                                </a>
+                                <a onclick="showTab('workspace')" class="quick-action-btn">
+                                    <i class="fas fa-folder-open"></i>
+                                    <div>
+                                        <h4>Manage Workspace</h4>
+                                        <p>Manage users, keys, and settings</p>
+                                    </div>
+                                </a>
+                                <a onclick="showTab('docs')" class="quick-action-btn">
+                                    <i class="fas fa-book"></i>
+                                    <div>
+                                        <h4>SDK Integration Guide</h4>
+                                        <p>Read step-by-step C# setup guide</p>
+                                    </div>
+                                </a>
+                                <a onclick="showTab('settings')" class="quick-action-btn">
+                                    <i class="fas fa-sliders-h"></i>
+                                    <div>
+                                        <h4>Console Settings</h4>
+                                        <p>Change themes & default options</p>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="home-right-col">
+                        <!-- Global Live Activity Stream -->
+                        <div class="glass-panel activity-panel" style="height: 100%; display: flex; flex-direction: column; margin-top: 0;">
+                            <h3><i class="fas fa-terminal header-icon"></i> Recent Activity Log</h3>
+                            <p class="text-muted" style="font-size: 12px; margin-bottom: 15px;">Unified, live event stream across all application modules.</p>
+                            <div id="global-log-list" class="terminal-view" style="flex-grow: 1; max-height: 400px; min-height: 350px; overflow-y: auto;">
+                                <span class="terminal-placeholder">Awaiting events stream from clients...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1. Applications Tab -->
+            <div id="apps-tab" class="tab-content" style="display:none;">
+                <div class="tab-header">
+                    <div>
+                        <h1>Applications Dashboard</h1>
+                        <p class="text-muted">High-level view of all active services and analytics.</p>
                     </div>
                 </div>
 
@@ -335,109 +392,141 @@
                                 Settings</button>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- 3. Documentation Tab -->
+                           <!-- 3. Documentation Tab -->
             <div id="docs-tab" class="tab-content" style="display:none;">
                 <div class="tab-header">
                     <div>
                         <h1>Developer Documentation</h1>
-                        <p class="text-muted">Integrate the LegitAuth API client into your application within minutes.
-                        </p>
+                        <p class="text-muted">Step-by-step guide to integrate the LegitAuth SDK into your C# application.</p>
                     </div>
                 </div>
 
                 <div class="glass-panel docs-download-box">
                     <div>
-                        <h3>Download C# SDK File</h3>
-                        <p class="text-muted">Secure, asynchronous module built on modern System.Text.Json dependencies.
-                        </p>
+                        <h3>Download C# SDK Wrapper</h3>
+                        <p class="text-muted">Fully async wrapper built on modern System.Text.Json dependencies. Includes automatic local credentials saving utilities.</p>
                     </div>
-                    <a href="/download/auth" target="_blank" class="glow-btn btn-success"><i
-                            class="fas fa-download"></i> Download Auth.cs</a>
+                    <a href="/download/auth" target="_blank" class="glow-btn btn-success"><i class="fas fa-download"></i> Download Auth.cs</a>
                 </div>
 
+                <!-- Step 1: Add Wrapper -->
                 <div class="glass-panel code-doc-section">
-                    <h3 class="docs-section-title"><i class="fas fa-arrow-right-to-bracket text-primary"></i> 1. App
-                        Initialization</h3>
-                    <p>Load the authentication client on startup. Make sure to download and add <code>Auth.cs</code> to
-                        your project.</p>
+                    <h3 class="docs-section-title"><i class="fas fa-file-code text-primary"></i> Step 1: Add Auth.cs to Your Project</h3>
+                    <p>First, download the <code>Auth.cs</code> wrapper file using the button above. Copy this file into your Visual Studio project directory, right-click your project in the Solution Explorer, select <strong>Add &gt; Existing Item...</strong>, and choose <code>Auth.cs</code>.</p>
+                    <p>At the top of your form class file (e.g. <code>LoginForm.cs</code>), add the namespace reference:</p>
                     <div class="code-block-wrapper">
-                        <pre><code>using Auth; // Load module namespaces
+                        <pre><code>using Auth; // Load the LegitAuth namespace</code></pre>
+                    </div>
+                </div>
 
-private void Form1_Load(object sender, EventArgs e)
+                <!-- Step 2: Form Load Initialization -->
+                <div class="glass-panel code-doc-section">
+                    <h3 class="docs-section-title"><i class="fas fa-power-off text-primary"></i> Step 2: Initialize in Form_Load</h3>
+                    <p>Double-click your login form in the Visual Studio designer to create the <code>Form_Load</code> event handler. Put the initialization code there. You can copy the credentials from your app card in the dashboard.</p>
+                    <div class="code-block-wrapper">
+                        <pre><code>private void LoginForm_Load(object sender, EventArgs e)
 {
-    // Initialize application credentials
+    // 1. Initialize application credentials
     LegitAuthApp.init(
-        "APP_NAME",       // Your App Name
-        "OWNER_ID",       // Developer Owner ID
-        "SECRET",         // App Shared Secret
-        "1.0"             // App Version
+        "APP_NAME",         // Your Application Name
+        "OWNER_ID",         // Developer Owner ID
+        "SECRET",           // App Shared Secret
+        "1.0"               // App Version
     );
     
-    // Paste in login button
-
-    KeyAuthApp.login(User.Text, Pass.Text);
-SaveUserAndPass();
-if (KeyAuthApp.response.success)
-{
-
-    Form1 main = new Form1();
-    main.Show();
-    this.Hide();
-
-
-}
-else
-{
-    status.Text = KeyAuthApp.response.message;
-    Console.Beep(400, 300);
-}
-
-    
+    // 2. Optional: Load previously saved credentials to autofill inputs
+    string savedUser, savedPass;
+    LegitAuthApp.LoadCredentials(out savedUser, out savedPass);
+    if (!string.IsNullOrEmpty(savedUser))
+    {
+        txtUsername.Text = savedUser;
+        txtPassword.Text = savedPass;
+        chkRememberMe.Checked = true; // Set check if you have a remember me checkbox
+    }
 }</code></pre>
                     </div>
                 </div>
 
+                <!-- Step 3: Login Button Event -->
                 <div class="glass-panel code-doc-section">
-                    <h3 class="docs-section-title"><i class="fas fa-key text-primary"></i> 2. Activate License Key</h3>
-                    <p>Validate client entry directly via single-use license key authentication.</p>
+                    <h3 class="docs-section-title"><i class="fas fa-user-shield text-primary"></i> Step 3: Implement User/Password Login Button</h3>
+                    <p>Double-click your Login button to create the click handler. Because our API runs asynchronously to keep the UI responsive, make sure to add the <code>async</code> keyword to your event handler method name.</p>
                     <div class="code-block-wrapper">
-                        <pre><code>private async void btnLoginKey_Click(object sender, EventArgs e)
+                        <pre><code>private async void btnLogin_Click(object sender, EventArgs e)
 {
-    await LegitAuthApp.license(txtLicense.Text);
-    
+    string username = txtUsername.Text.Trim();
+    string password = txtPassword.Text;
+
+    if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+    {
+        lblStatus.Text = "Please enter username and password.";
+        return;
+    }
+
+    // Trigger async login request
+    await LegitAuthApp.login(username, password);
+
     if (LegitAuthApp.response.success)
     {
-        MessageBox.Show("Welcome! Key verified successfully.");
+        // Optional: Save user credentials locally if "Remember Me" is checked
+        if (chkRememberMe.Checked)
+        {
+            LegitAuthApp.SaveCredentials(username, password);
+        }
+        else
+        {
+            LegitAuthApp.SaveCredentials("", ""); // Clear credentials cache
+        }
+
+        MessageBox.Show("Welcome back!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        
+        // Load main window and hide login window
         MainForm dashboard = new MainForm();
         dashboard.Show();
         this.Hide();
     }
     else
     {
-        lblError.Text = LegitAuthApp.response.message; // Outputs reason (e.g. Expired, HWID mismatch)
+        // Show server response error (e.g. invalid password, account banned, HWID mismatch)
+        lblStatus.Text = LegitAuthApp.response.message;
+        Console.Beep(400, 300); // Alert audio warning
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <!-- Step 4: License Button Event -->
+                <div class="glass-panel code-doc-section">
+                    <h3 class="docs-section-title"><i class="fas fa-key text-primary"></i> Step 4: Implement License Key Login Button</h3>
+                    <p>If you prefer single-use license key authentication instead of username/password, use the <code>license</code> method. Implement this click handler for your key entry button:</p>
+                    <div class="code-block-wrapper">
+                        <pre><code>private async void btnLoginKey_Click(object sender, EventArgs e)
+{
+    string key = txtLicenseKey.Text.Trim();
+
+    if (string.IsNullOrEmpty(key))
+    {
+        lblStatus.Text = "Please enter your license key.";
+        return;
     }
 
-    // Paste in login button
+    // Trigger async license verification
+    await LegitAuthApp.license(key);
 
-    LicenseAuthApp.login(User.Text, Pass.Text);
-    SaveUserAndPass();
-        if (LicenseAuthApp.response.success)
-        {
-
-            Form1 main = new Form1();
-            main.Show();
-            this.Hide() ;
-        }
-        else
-        {
-    status.Text = LicenseAuthApp.response.message;
-    Console.Beep(400, 300);
-        }
-
-
+    if (LegitAuthApp.response.success)
+    {
+        MessageBox.Show("License verified successfully!", "Welcome", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        
+        MainForm dashboard = new MainForm();
+        dashboard.Show();
+        this.Hide();
+    }
+    else
+    {
+        // Show failure status (e.g. key expired, banned, invalid key)
+        lblStatus.Text = LegitAuthApp.response.message;
+        Console.Beep(400, 300);
+    }
 }</code></pre>
                     </div>
                 </div>
@@ -448,8 +537,7 @@ else
                 <div class="tab-header">
                     <div>
                         <h1>Reseller Network Control</h1>
-                        <p class="text-muted">Configure partner permissions, allocate allowed applications, and check
-                            logs.</p>
+                        <p class="text-muted">Configure partner permissions, allocate allowed applications, and check logs.</p>
                     </div>
                 </div>
 
@@ -598,22 +686,6 @@ else
                                 style="display: none; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--text-highlight);">
                                 <i class="fas fa-user-shield"></i> Authenticated as Reseller Profile
                             </div>
-                        </div>
-
-                        <!-- Update Profile Form -->
-                        <div id="creator-update-details-form" class="settings-form-container border-top">
-                            <h4>Update Account Details</h4>
-                            <div class="settings-field">
-                                <label class="glow-label">Creator Full Name</label>
-                                <input type="text" id="profile-full-name" placeholder="Enter your full name">
-                            </div>
-                            <div class="settings-field">
-                                <label class="glow-label">Update Account Password</label>
-                                <input type="password" id="profile-new-password"
-                                    placeholder="Enter new password (optional)">
-                            </div>
-                            <button onclick="saveCreatorProfile()" class="glow-btn"><i class="fas fa-user-pen"></i>
-                                Update Credentials</button>
                         </div>
                     </div>
                 </div>

@@ -167,7 +167,7 @@ async function showDashboard() {
         if (defaultsTabBtn) defaultsTabBtn.style.display = 'block';
     }
     
-    loadApps();
+    showTab('home');
 }
 
 function showTab(tabId) {
@@ -183,9 +183,13 @@ function showTab(tabId) {
         }
     });
     
-    if (tabId === 'resellers') {
+    if (tabId === 'home') {
+        loadHomeData();
+    } else if (tabId === 'resellers') {
         loadResellers();
         loadResellerAppCheckboxes();
+    } else if (tabId === 'apps') {
+        loadApps();
     }
 }
 
@@ -219,19 +223,16 @@ async function loadApps() {
         let totalUsers = 0;
         let totalLicenses = 0;
 
-        // Fetch counts for stats (Async all apps)
-        await Promise.all(apps.map(async app => {
-            try {
-                const uRes = await fetch(`${API_URL}/apps/${app.id}/users`, { headers: {'Authorization': `Bearer ${token}`} });
-                if(uRes.ok) { const u = await uRes.json(); totalUsers += u.length; }
-                
-                const lRes = await fetch(`${API_URL}/apps/${app.id}/licenses`, { headers: {'Authorization': `Bearer ${token}`} });
-                if(lRes.ok) { const l = await lRes.json(); totalLicenses += l.length; }
-            } catch(e){}
-        }));
+        apps.forEach(app => {
+            totalUsers += app.user_count || 0;
+            totalLicenses += app.license_count || 0;
+        });
         
         document.getElementById('stat-users').innerText = totalUsers;
         document.getElementById('stat-licenses').innerText = totalLicenses;
+
+        // Update the central growth chart on the Home tab
+        updateGrowthChart(totalUsers, totalLicenses);
 
         const isReseller = localStorage.getItem('user_role') === 'reseller';
         apps.forEach(app => {
@@ -1135,33 +1136,100 @@ function toggleResellerAdminState(checked) {
     });
 }
 
-async function saveCreatorProfile() {
-    const fullName = document.getElementById('profile-full-name').value.trim();
-    const newPassword = document.getElementById('profile-new-password').value;
+async function loadHomeData() {
     const token = localStorage.getItem('token');
+    if (!token) return logout();
     
-    const payload = {};
-    if (fullName) payload.full_name = fullName;
-    if (newPassword) payload.password = newPassword;
-    
+    // 1. Fetch apps and calculate stats (this updates stats cards and growth chart)
     try {
-        const res = await fetch('/api/creator/profile', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(payload)
+        const res = await fetch(`${API_URL}/apps`, {
+            headers: {'Authorization': `Bearer ${token}`}
         });
         if (res.ok) {
-            showToast('Profile updated successfully!', 'success');
-            document.getElementById('profile-new-password').value = '';
-        } else {
-            const data = await res.json();
-            showToast(data.detail || 'Failed to update profile', 'error');
+            const apps = await res.json();
+            currentApps = apps;
+            
+            // Populate workspace selectors
+            const selector = document.getElementById('app-selector');
+            if (selector) {
+                selector.innerHTML = '<option value="">-- Choose Application --</option>';
+                apps.forEach(app => {
+                    const opt = document.createElement('option');
+                    opt.value = app.id;
+                    opt.text = app.app_name;
+                    selector.appendChild(opt);
+                });
+            }
+            
+            // Update stats
+            const statApps = document.getElementById('stat-apps');
+            if (statApps) statApps.innerText = apps.length;
+            
+            let totalUsers = 0;
+            let totalLicenses = 0;
+            apps.forEach(app => {
+                totalUsers += app.user_count || 0;
+                totalLicenses += app.license_count || 0;
+            });
+            
+            const statUsers = document.getElementById('stat-users');
+            if (statUsers) statUsers.innerText = totalUsers;
+            
+            const statLicenses = document.getElementById('stat-licenses');
+            if (statLicenses) statLicenses.innerText = totalLicenses;
+            
+            // Render growth chart on Home overview tab
+            updateGrowthChart(totalUsers, totalLicenses);
         }
     } catch (e) {
-        showToast('Error communicating with server', 'error');
+        console.error('Failed to load apps overview in home data', e);
+    }
+    
+    // 2. Fetch global unified logs
+    try {
+        const logList = document.getElementById('global-log-list');
+        if (logList) {
+            const res = await fetch('/api/creator/global-logs', {
+                headers: {'Authorization': `Bearer ${token}`}
+            });
+            if (res.ok) {
+                const logs = await res.json();
+                logList.innerHTML = '';
+                if (logs.length === 0) {
+                    logList.innerHTML = '<span class="terminal-placeholder">Awaiting log activities from API client stream...</span>';
+                    return;
+                }
+                
+                logs.forEach(log => {
+                    const line = document.createElement('div');
+                    line.className = 'terminal-line';
+                    line.style.margin = '4px 0';
+                    line.style.fontSize = '12px';
+                    line.style.lineHeight = '1.4';
+                    
+                    // Color tags based on action type
+                    let actionColor = 'var(--primary)';
+                    if (log.action.includes('SUCCESS')) actionColor = '#10b981'; // success emerald
+                    else if (log.action.includes('FAILED') || log.action.includes('FAIL') || log.action.includes('BAN')) actionColor = '#ef4444'; // danger red
+                    else if (log.action.includes('RESET')) actionColor = '#f59e0b'; // warning amber
+                    
+                    const logDate = new Date(log.created_at);
+                    const time = logDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                    
+                    line.innerHTML = `
+                        <span class="terminal-timestamp" style="color:var(--text-muted); margin-right:4px;">[${time}]</span>
+                        <span class="terminal-app" style="color:#a78bfa; font-weight:600; margin-right:4px;">[${log.app_name}]</span>
+                        <span class="terminal-action" style="color:${actionColor}; font-weight:bold; margin-right:6px;">${log.action}</span>
+                        <span class="terminal-desc" style="color:#e2e8f0;">${log.description}</span>
+                    `;
+                    logList.appendChild(line);
+                });
+            } else {
+                logList.innerHTML = '<span class="terminal-placeholder" style="color:#ef4444;">Error loading activity logs.</span>';
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load global logs', e);
     }
 }
 

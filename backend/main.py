@@ -7,9 +7,8 @@ from typing import Optional, List
 from dotenv import load_dotenv
 from urllib.parse import urlencode
 
-# Load environment variables from both root and discord_bot directories
+# Load environment variables from root directory
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "discord_bot", ".env"), override=True)
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -104,24 +103,6 @@ class LicenseCreateRequest(BaseModel):
     amount: int
     duration_days: int
     hwid_lock: Optional[bool] = True
-
-class DiscordConfigRequest(BaseModel):
-    discord_guild_id: Optional[str] = None
-    discord_channel_id: Optional[str] = None
-    discord_guild_name: Optional[str] = None
-    discord_channel_name: Optional[str] = None
-    discord_role_id: Optional[str] = None
-    discord_role_name: Optional[str] = None
-    discord_log_enabled: Optional[bool] = False
-    discord_welcome_enabled: Optional[bool] = False
-    discord_welcome_msg: Optional[str] = "Welcome to the Server!"
-    discord_role_on_register: Optional[str] = None
-    discord_dm_notifications: Optional[bool] = True
-    discord_member_reset_enabled: Optional[bool] = False
-    discord_login_log_enabled: Optional[bool] = False
-    discord_embed_color: Optional[str] = "#00FFAA"
-    discord_allowed_roles: Optional[str] = None
-    bot_enabled: Optional[bool] = True
 
 class ClientRegisterRequest(BaseModel):
     owner_id: str
@@ -443,35 +424,10 @@ def google_login(req: GoogleLoginRequest, db: Session = Depends(get_db)):
     except ValueError as e:
         print(f"Google Token Validation Error: {e}")
         raise HTTPException(status_code=401, detail=f"Google Token Error: {e}")
-
-def send_discord_log(guild_id: str, channel_id: str, message: str):
-    pass
-
 def log_app_action(db: Session, app_id: int, action: str, description: str):
     new_log = AppLog(app_id=app_id, action=action, description=description)
     db.add(new_log)
     db.commit()
-    
-    # Send log to Discord if enabled
-    app = db.query(Application).filter(Application.id == app_id).first()
-    if app:
-        creator = db.query(Creator).filter(Creator.id == app.creator_id).first()
-        if creator and creator.discord_channel_id:
-            # Check if logs are enabled, or specifically login logs for SUCCESS/FAIL
-            should_send = creator.discord_log_enabled
-            if ("LOGIN" in action) and creator.discord_login_log_enabled:
-                should_send = True
-                
-            if should_send:
-                emoji = "📝"
-                if "SUCCESS" in action: emoji = "🟢"
-                elif "FAILED" in action or "FAIL" in action: emoji = "🔴"
-                elif "BAN" in action: emoji = "🔨"
-                elif "RESET" in action: emoji = "🔄"
-                elif "CREATED" in action: emoji = "➕"
-                
-                msg = f"{emoji} **[LOG: {action}]** {description} (App: `{app.app_name}`)"
-                send_discord_log(creator.discord_guild_id, creator.discord_channel_id, msg)
 
 @app.get("/api/creator/apps")
 def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
@@ -489,7 +445,7 @@ def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db
             hide_secrets = not reseller.can_view_secret
         else:
             hide_secrets = False
-    
+            
     return [{
         "id": app.id,
         "app_name": app.app_name,
@@ -500,19 +456,8 @@ def get_creator_apps(current_creator: Creator = Depends(get_current_creator), db
         "version": app.version,
         "dev_message": app.dev_message,
         "created_at": app.created_at,
-        "discord_guild_id": app.discord_guild_id,
-        "discord_channel_id": app.discord_channel_id,
-        "discord_guild_name": app.discord_guild_name,
-        "discord_channel_name": app.discord_channel_name,
-        "discord_log_enabled": app.discord_log_enabled,
-        "discord_welcome_enabled": app.discord_welcome_enabled,
-        "discord_welcome_msg": app.discord_welcome_msg,
-        "discord_role_on_register": app.discord_role_on_register,
-        "discord_dm_notifications": app.discord_dm_notifications,
-        "discord_role_id": app.discord_role_id,
-        "discord_role_name": app.discord_role_name,
-        "discord_section_id": app.discord_section_id,
-        "discord_section_name": app.discord_section_name
+        "user_count": len(app.users),
+        "license_count": len(app.licenses)
     } for app in applications]
 
 @app.post("/api/creator/apps/create")
@@ -705,6 +650,39 @@ def get_app_logs(app_id: int, current_creator: Creator = Depends(get_current_cre
     logs = db.query(AppLog).filter(AppLog.app_id == app.id).order_by(AppLog.id.desc()).limit(50).all()
     return [{"id": l.id, "action": l.action, "description": l.description, "created_at": l.created_at.isoformat()} for l in logs]
 
+@app.get("/api/creator/global-logs")
+def get_global_logs(current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
+    is_res = getattr(current_creator, "is_reseller", False)
+    allowed_ids = []
+    if is_res:
+        reseller = current_creator.reseller
+        if not getattr(reseller, "is_admin", False):
+            if reseller.allowed_apps:
+                allowed_ids = [int(x) for x in reseller.allowed_apps.split(",") if x.strip()]
+            else:
+                return []
+            
+    if is_res and not getattr(current_creator.reseller, "is_admin", False):
+        apps = db.query(Application).filter(Application.id.in_(allowed_ids), Application.creator_id == current_creator.id).all()
+    else:
+        apps = db.query(Application).filter(Application.creator_id == current_creator.id).all()
+        
+    app_ids = [app.id for app in apps]
+    if not app_ids:
+        return []
+        
+    logs = db.query(AppLog).filter(AppLog.app_id.in_(app_ids)).order_by(AppLog.id.desc()).limit(15).all()
+    
+    app_map = {app.id: app.app_name for app in apps}
+    
+    return [{
+        "id": l.id,
+        "app_name": app_map.get(l.app_id, "Unknown"),
+        "action": l.action,
+        "description": l.description,
+        "created_at": l.created_at.isoformat()
+    } for l in logs]
+
 @app.delete("/api/creator/apps/{app_id}/clean-banned")
 def clean_banned_entities(app_id: int, current_creator: Creator = Depends(get_current_creator), db: Session = Depends(get_db)):
     check_reseller_access(current_creator, app_id, "clean_banned")
@@ -729,9 +707,6 @@ def clean_banned_entities(app_id: int, current_creator: Creator = Depends(get_cu
         "users_deleted": user_count,
         "licenses_deleted": lic_count
     }
-
-def send_discord_webhook(url: str, message: str):
-    pass
 
 # --- Client API ---
 @app.post("/api/client/login")
@@ -774,7 +749,6 @@ def client_login(req: ClientLoginRequest, request: Request, db: Session = Depend
             db.commit()
             
         log_app_action(db, app.id, "LOGIN_SUCCESS", f"License logged in: {lic.license_key}")
-        send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{lic.license_key}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
             
         return {"success": True, "message": "Logged in", "user": {"username": lic.license_key, "expires_at": lic.expires_at.isoformat() if lic.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
     
@@ -807,7 +781,6 @@ def client_login(req: ClientLoginRequest, request: Request, db: Session = Depend
             db.commit()
             
         log_app_action(db, app.id, "LOGIN_SUCCESS", f"User logged in: {user.username}")
-        send_discord_webhook(app.webhook_url, f"🟢 **Login Alert**\nUser: `{user.username}`\nApp: `{app.app_name}`\nIP: `{client_ip}`")
             
         return {"success": True, "message": "Logged in", "user": {"username": user.username, "expires_at": user.expires_at.isoformat() if user.expires_at else "Lifetime"}, "dev_message": app.dev_message, "version": app.version}
     
